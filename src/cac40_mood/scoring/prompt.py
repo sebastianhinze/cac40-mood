@@ -108,28 +108,30 @@ def truncate_text(text: str, max_chars: int) -> tuple[str, bool]:
     return cut.rstrip(), True
 
 
-def describe_size(revenue_eur_bn: float) -> str:
-    """'about EUR 26 billion' / 'about EUR 600 million': a rounded size the model can use."""
-    if revenue_eur_bn >= 10:
-        return f"about EUR {revenue_eur_bn:.0f} billion"
-    if revenue_eur_bn >= 1:
-        return f"about EUR {revenue_eur_bn:.1f} billion"
-    return f"about EUR {revenue_eur_bn * 1000:.0f} million"
+def describe_size(revenue_bn: float, currency: str = "EUR") -> str:
+    """'about EUR 26 billion' / 'about USD 600 million': a rounded size the model can use."""
+    if revenue_bn >= 10:
+        return f"about {currency} {revenue_bn:.0f} billion"
+    if revenue_bn >= 1:
+        return f"about {currency} {revenue_bn:.1f} billion"
+    return f"about {currency} {revenue_bn * 1000:.0f} million"
 
 
 def build_user_message(
-    issuer: str, revenue_eur_bn: float, title: str, text: str, max_chars: int
+    issuer: str, size: str, title: str, text: str, max_chars: int
 ) -> tuple[str, bool]:
     """The user message for one document, plus whether the text was cut.
 
-    The issuer's name is given so "the issuer's shareholders" is unambiguous even when a
-    release is signed by two companies. No date is added: an explicit date would make it
-    easier for the model to recall what happened afterwards.
+    `size` is a rounded description of the issuer's annual revenue (see `describe_size` and
+    scoring/revenue.py for where the figure comes from). The issuer's name is given so "the
+    issuer's shareholders" is unambiguous even when a release is signed by two companies.
+    No date is added: an explicit date would make it easier for the model to recall what
+    happened afterwards.
     """
     body, was_cut = truncate_text(text, max_chars)
     parts = [
         f"Issuer: {issuer}",
-        f"Issuer's approximate annual revenue: {describe_size(revenue_eur_bn)}",
+        f"Issuer's approximate annual revenue: {size}",
         f"Title: {title.strip()}",
         "",
         "<document>",

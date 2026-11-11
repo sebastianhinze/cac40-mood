@@ -27,26 +27,26 @@ import pandas as pd
 
 from cac40_mood.config import CACHE_DIR, PROCESSED_DIR, load_settings
 from cac40_mood.scoring.prompt import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from cac40_mood.scoring.revenue import with_size
 from cac40_mood.scoring.samples import chars_for_token_cap, pilot_sample, reference_sample
-from cac40_mood.scoring.scorer import ScoringConfig, score_document
+from cac40_mood.scoring.scorer import (
+    BULK_MAX_OUTPUT_TOKENS,
+    BULK_THINKING,
+    ScoringConfig,
+    score_document,
+)
 from cac40_mood.scoring.spend import SpendLog
 
 LLM_CACHE_DIR: Path = CACHE_DIR / "llm"
 SPEND_LOG_PATH: Path = LLM_CACHE_DIR / "spend.jsonl"
 PILOT_DIR: Path = PROCESSED_DIR / "pilot"
 
-# Thinking setting chosen in the pilot (DECISIONS #31) and used for the bulk run.
-THINKING: str = "low"
-
-# Room for the JSON answer (about 125 tokens) plus any reasoning the model does first.
-MAX_OUTPUT_TOKENS: int = 4_000
-
 
 def score_many(
     client: anthropic.Anthropic, config: ScoringConfig, documents: pd.DataFrame, spend_log: SpendLog
 ) -> pd.DataFrame:
     """Score each row of `documents` with one configuration; return one result row per doc."""
-    columns = ["doc_id", "issuer", "revenue_eur_bn", "title", "text"]
+    columns = ["doc_id", "issuer", "size", "title", "text"]
     records = [
         score_document(client, config, document, LLM_CACHE_DIR, spend_log)
         for document in documents[columns].to_dict("records")
@@ -62,15 +62,15 @@ def count_tokens_step(client: anthropic.Anthropic) -> pd.DataFrame:
     the configured cap exactly as it would be sent (to learn the real input size).
     """
     settings = load_settings()
-    documents = pilot_sample(settings.llm_pilot_size)
+    documents = with_size(pilot_sample(settings.llm_pilot_size))
     cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
     rows = []
     for row in documents.itertuples():
         full_message, _ = build_user_message(
-            row.issuer, row.revenue_eur_bn, row.title, row.text, max_chars=10**9
+            row.issuer, row.size, row.title, row.text, max_chars=10**9
         )
         cut_message, was_cut = build_user_message(
-            row.issuer, row.revenue_eur_bn, row.title, row.text, max_chars=cap_chars
+            row.issuer, row.size, row.title, row.text, max_chars=cap_chars
         )
         document_only = client.messages.count_tokens(
             model=settings.llm_model, messages=[{"role": "user", "content": full_message}]
@@ -104,11 +104,13 @@ def pilot_step(client: anthropic.Anthropic, spend_log: SpendLog) -> pd.DataFrame
     scores move between identical requests, which is the yardstick for every other comparison.
     """
     settings = load_settings()
-    documents = pilot_sample(settings.llm_pilot_size)
+    documents = with_size(pilot_sample(settings.llm_pilot_size))
     cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
     tables = []
     for repeat in (1, 2):
-        config = ScoringConfig(settings.llm_model, THINKING, cap_chars, MAX_OUTPUT_TOKENS, repeat)
+        config = ScoringConfig(
+            settings.llm_model, BULK_THINKING, cap_chars, BULK_MAX_OUTPUT_TOKENS, repeat
+        )
         tables.append(score_many(client, config, documents, spend_log).assign(repeat=repeat))
     result = pd.concat(tables, ignore_index=True)
     PILOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -124,10 +126,12 @@ def reference_step(client: anthropic.Anthropic, spend_log: SpendLog) -> pd.DataF
     refusal is simply recorded as a problem (DECISIONS #35).
     """
     settings = load_settings()
-    documents = reference_sample()
+    documents = with_size(reference_sample())
     cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
-    cheap = ScoringConfig(settings.llm_model, THINKING, cap_chars, MAX_OUTPUT_TOKENS)
-    reference = ScoringConfig(settings.llm_reference_model, "medium", cap_chars, MAX_OUTPUT_TOKENS)
+    cheap = ScoringConfig(settings.llm_model, BULK_THINKING, cap_chars, BULK_MAX_OUTPUT_TOKENS)
+    reference = ScoringConfig(
+        settings.llm_reference_model, "medium", cap_chars, BULK_MAX_OUTPUT_TOKENS
+    )
     result = pd.concat(
         [
             score_many(client, cheap, documents, spend_log).assign(role="cheap"),

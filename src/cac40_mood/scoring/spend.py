@@ -29,11 +29,18 @@ class SpendCapExceededError(RuntimeError):
     """Sending this request could push total spend above the cap, so it was not sent."""
 
 
+def price_per_million(model: str) -> tuple[float, float]:
+    """(input, output) price for a model id. A dated id such as 'claude-haiku-5-5-20260101'
+    is priced like its base id; an unknown model raises, because it has no cost bound."""
+    for known, prices in PRICES_PER_MILLION.items():
+        if model == known or model.startswith(known + "-"):
+            return prices
+    raise KeyError(f"No price recorded for model {model!r}; add it to PRICES_PER_MILLION")
+
+
 def cost_usd(model: str, input_tokens: int, output_tokens: int, batch: bool = False) -> float:
     """Cost of one call in USD. Thinking tokens are billed as output tokens."""
-    if model not in PRICES_PER_MILLION:
-        raise KeyError(f"No price recorded for model {model!r}; add it to PRICES_PER_MILLION")
-    input_price, output_price = PRICES_PER_MILLION[model]
+    input_price, output_price = price_per_million(model)
     cost = (input_tokens * input_price + output_tokens * output_price) / 1_000_000
     return cost * BATCH_DISCOUNT if batch else cost
 
@@ -67,10 +74,16 @@ class SpendLog:
             )
 
     def record(
-        self, model: str, version_tag: str, doc_id: str, input_tokens: int, output_tokens: int
+        self,
+        model: str,
+        version_tag: str,
+        doc_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        batch: bool = False,
     ) -> float:
-        """Log one paid call and return its cost."""
-        cost = cost_usd(model, input_tokens, output_tokens)
+        """Log one paid call (at batch prices if it came through a batch) and return its cost."""
+        cost = cost_usd(model, input_tokens, output_tokens, batch)
         entry = {
             "at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
             "model": model,
@@ -78,6 +91,7 @@ class SpendLog:
             "doc_id": doc_id,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "batch": batch,
             "cost_usd": cost,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)

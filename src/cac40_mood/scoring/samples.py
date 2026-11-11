@@ -26,18 +26,26 @@ def chars_for_token_cap(token_cap: int) -> int:
     return int(token_cap * CHARS_PER_TOKEN)
 
 
-def scoreable_documents() -> pd.DataFrame:
-    """Documents to score with usable text, with issuer name and size, train and validation only."""
+def documents_with_text(include_test: bool) -> pd.DataFrame:
+    """Documents to score that have usable text, with the issuer's name.
+
+    `include_test=True` is only for the bulk scoring run: test-period documents must be scored
+    so that features exist for the final evaluation, but nothing is analysed on them before.
+    """
     filings = pd.read_parquet(FILINGS_PATH)
     texts = pd.read_parquet(TEXTS_PATH)
-    firms = load_universe().rename(
-        columns={"name": "issuer", "revenue_2018_eur_bn": "revenue_eur_bn"}
-    )
+    firms = load_universe().rename(columns={"name": "issuer"})
     documents = filings[~filings["is_admin"]].merge(texts, on="doc_id")
-    documents = documents.merge(firms[["firm_id", "issuer", "revenue_eur_bn"]], on="firm_id")
-    usable = documents["text_quality"] == "ok"
-    in_train_or_val = documents["split"].isin(["train", "val"])
-    return documents[usable & in_train_or_val].reset_index(drop=True)
+    documents = documents.merge(firms[["firm_id", "issuer"]], on="firm_id")
+    keep = documents["text_quality"] == "ok"
+    if not include_test:
+        keep &= documents["split"].isin(["train", "val"])
+    return documents[keep].reset_index(drop=True)
+
+
+def scoreable_documents() -> pd.DataFrame:
+    """Usable documents from the train and validation periods (everything except the bulk run)."""
+    return documents_with_text(include_test=False)
 
 
 def pilot_sample(size: int) -> pd.DataFrame:

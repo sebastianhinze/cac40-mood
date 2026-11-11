@@ -1,32 +1,33 @@
-"""Score one document: cache lookup, spend-cap check, one API call, validation, logging.
+"""Score documents: build the request, get the answer (cache, direct call or batch), validate.
 
-Order of operations for every document:
+For every document:
 1. build the exact request that would be sent;
-2. look it up in the disk cache and return the stored answer if it exists, so the same
-   document is never paid for twice;
-3. otherwise check the spend cap against the request's worst-case cost;
-4. call the API with a JSON schema, validate the answer, log tokens and cost, store it.
-
-The cache key is a hash of the complete request: model, instructions, JSON schema, thinking
-setting, output limit and the message with the document text. Changing any of them, however
-slightly, gives a different key, so answers produced under one prompt or setting can never be
-returned for another (DECISIONS #34).
+2. reuse the stored answer if the cache has one, so no document is paid for twice;
+3. otherwise get an answer, either with one direct call or as part of a batch;
+4. validate the answer against the schema and return one flat result row.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import anthropic
+import pandas as pd
 from pydantic import ValidationError
 
+from cac40_mood.scoring import llm
+from cac40_mood.scoring.batch import BatchItem, run_batch
 from cac40_mood.scoring.prompt import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
 from cac40_mood.scoring.schema import SCORE_JSON_SCHEMA, DocumentScore
-from cac40_mood.scoring.spend import SpendLog, worst_case_cost_usd
+from cac40_mood.scoring.spend import SpendLog
+
+# Bulk-run settings. Thinking at low effort was chosen in the pilot (DECISIONS #31). Answers
+# are about 125 tokens; 1,000 leaves room for some reasoning while keeping the worst-case cost
+# of a request (which counts against the spend cap) small.
+BULK_THINKING: str = "low"
+BULK_MAX_OUTPUT_TOKENS: int = 1_000
 
 
 @dataclass(frozen=True)
@@ -74,31 +75,52 @@ def request_arguments(config: ScoringConfig, user_message: str) -> dict[str, Any
     }
 
 
-def cache_key(request: dict[str, Any], prompt_version: str, repeat: int) -> str:
-    """sha256 over the prompt version, the repeat number and the complete request.
+def build_request(
+    config: ScoringConfig, document: dict[str, Any]
+) -> tuple[dict[str, Any], str, bool]:
+    """Return (request, cache key, whether the text was cut) for one document.
 
-    The request is written as JSON with sorted keys so the same request always gives the same
-    text, and therefore the same hash.
+    `document` needs the keys issuer, size, title and text.
     """
-    canonical_request = json.dumps(request, sort_keys=True, ensure_ascii=False)
-    joined = "\n".join([prompt_version, f"repeat={repeat}", canonical_request])
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+    user_message, was_cut = build_user_message(
+        document["issuer"],
+        document["size"],
+        document["title"],
+        document["text"],
+        config.max_doc_chars,
+    )
+    request = request_arguments(config, user_message)
+    return request, llm.cache_key(request, PROMPT_VERSION, config.repeat), was_cut
 
 
-def cache_path(cache_dir: Path, key: str) -> Path:
-    """Two-character sub-folders keep any one folder from holding thousands of files."""
-    return cache_dir / key[:2] / f"{key}.json"
-
-
-def parse_response(response: anthropic.types.Message) -> tuple[DocumentScore | None, str]:
+def parse_answer(answer: dict[str, Any] | None) -> tuple[DocumentScore | None, str]:
     """Return (validated score or None, problem description or '')."""
-    if response.stop_reason != "end_turn":
-        return None, f"stop_reason={response.stop_reason}"
-    text = next((block.text for block in response.content if block.type == "text"), "")
+    if answer is None:
+        return None, "no answer (request failed or expired)"
+    if answer["stop_reason"] != "end_turn":
+        return None, f"stop_reason={answer['stop_reason']}"
     try:
-        return DocumentScore.model_validate_json(text), ""
+        return DocumentScore.model_validate_json(answer["text"]), ""
     except ValidationError as error:
         return None, f"invalid answer: {error.errors()[0]['msg']}"
+
+
+def result_record(
+    doc_id: str, config: ScoringConfig, was_cut: bool, answer: dict[str, Any] | None
+) -> dict[str, Any]:
+    """One flat row: bookkeeping columns plus the scores (absent if there was a problem)."""
+    score, problem = parse_answer(answer)
+    usage = answer or {"input_tokens": 0, "output_tokens": 0}
+    return {
+        "doc_id": doc_id,
+        "model": config.model,
+        "version_tag": config.version_tag,
+        "truncated": was_cut,
+        "input_tokens": usage["input_tokens"],
+        "output_tokens": usage["output_tokens"],
+        "problem": problem,
+        **(score.model_dump() if score else {}),
+    }
 
 
 def score_document(
@@ -108,46 +130,29 @@ def score_document(
     cache_dir: Path,
     spend_log: SpendLog,
 ) -> dict[str, Any]:
-    """Score one document (from cache if possible) and return a flat result record.
+    """Score one document with a direct call (used by the pilot)."""
+    request, key, was_cut = build_request(config, document)
+    answer = llm.call_once(
+        client, request, key, config.version_tag, document["doc_id"], cache_dir, spend_log
+    )
+    record = result_record(document["doc_id"], config, was_cut, answer)
+    return {**record, "from_cache": answer["from_cache"]}
 
-    `document` needs the keys doc_id, issuer, revenue_eur_bn, title and text.
-    """
-    user_message, was_cut = build_user_message(
-        document["issuer"],
-        document["revenue_eur_bn"],
-        document["title"],
-        document["text"],
-        config.max_doc_chars,
-    )
-    request = request_arguments(config, user_message)
-    path = cache_path(cache_dir, cache_key(request, PROMPT_VERSION, config.repeat))
-    if path.exists():
-        return {**json.loads(path.read_text()), "from_cache": True}
 
-    worst_case = worst_case_cost_usd(
-        config.model, len(SYSTEM_PROMPT) + len(user_message), config.max_output_tokens
-    )
-    spend_log.check_can_spend(worst_case)
-    response = client.messages.create(**request)
-    score, problem = parse_response(response)
-    cost = spend_log.record(
-        config.model,
-        config.version_tag,
-        document["doc_id"],
-        response.usage.input_tokens,
-        response.usage.output_tokens,
-    )
-    record: dict[str, Any] = {
-        "doc_id": document["doc_id"],
-        "model": config.model,
-        "version_tag": config.version_tag,
-        "truncated": was_cut,
-        "input_tokens": response.usage.input_tokens,
-        "output_tokens": response.usage.output_tokens,
-        "cost_usd": cost,
-        "problem": problem,
-        **(score.model_dump() if score else {}),
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, ensure_ascii=False, indent=1))
-    return {**record, "from_cache": False}
+def score_documents_in_batch(
+    client: anthropic.Anthropic,
+    config: ScoringConfig,
+    documents: list[dict[str, Any]],
+    cache_dir: Path,
+    spend_log: SpendLog,
+    state_path: Path,
+) -> pd.DataFrame:
+    """Score many documents through the Batches API and return one row per document."""
+    built = {document["doc_id"]: build_request(config, document) for document in documents}
+    items = [BatchItem(doc_id, request, key) for doc_id, (request, key, _) in built.items()]
+    answers = run_batch(client, items, config.version_tag, cache_dir, spend_log, state_path)
+    records = [
+        result_record(doc_id, config, was_cut, answers[doc_id])
+        for doc_id, (_, _, was_cut) in built.items()
+    ]
+    return pd.DataFrame(records)

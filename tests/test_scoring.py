@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from cac40_mood.scoring import agreement as ag
-from cac40_mood.scoring import prompt, scorer, spend
+from cac40_mood.scoring import llm, prompt, scorer, spend
 from cac40_mood.scoring.schema import (
     SCORE_JSON_SCHEMA,
     TOPICS,
@@ -79,7 +79,9 @@ def test_api_schema_and_pydantic_model_describe_the_same_fields_and_topics() -> 
 
 
 def message(text: str, max_chars: int = 100) -> tuple[str, bool]:
-    return prompt.build_user_message("Veolia", 26, "Résultats 2023", text, max_chars)
+    return prompt.build_user_message(
+        "Veolia", "about EUR 26 billion", "Résultats 2023", text, max_chars
+    )
 
 
 def test_short_text_is_sent_whole_with_issuer_and_size() -> None:
@@ -116,6 +118,7 @@ def test_cut_does_not_step_back_to_a_far_away_line_break() -> None:
 )
 def test_size_is_described_in_round_numbers(revenue_bn, expected) -> None:
     assert prompt.describe_size(revenue_bn) == expected
+    assert prompt.describe_size(9.66, "USD") == "about USD 9.7 billion"
 
 
 def test_message_carries_no_date() -> None:
@@ -146,6 +149,19 @@ def test_model_without_a_price_cannot_be_used() -> None:
         spend.cost_usd("some-unknown-model", 1, 1)
 
 
+def test_dated_model_id_is_priced_like_its_base_id() -> None:
+    assert spend.price_per_million("claude-haiku-5-5-20260301") == (0.10, 0.50)
+    with pytest.raises(KeyError):
+        spend.price_per_million("claude-haiku-5-50")  # a different model, not a dated id
+
+
+def test_batch_calls_are_logged_at_half_price(tmp_path) -> None:
+    log = spend.SpendLog(tmp_path / "spend.jsonl", cap_usd=1.0)
+    assert log.record("claude-haiku-5-5", "v2", "doc1", 4000, 125, batch=True) == pytest.approx(
+        0.00023125
+    )
+
+
 def test_worst_case_is_never_below_a_realistic_cost() -> None:
     realistic = spend.cost_usd("claude-haiku-5-5", int(9480 / 2.37), 125)
     assert spend.worst_case_cost_usd("claude-haiku-5-5", 9480, 600) > realistic
@@ -173,6 +189,7 @@ class FakeClient:
             stop_reason=stop_reason,
             content=[SimpleNamespace(type="text", text=answer_text)],
             usage=SimpleNamespace(input_tokens=4000, output_tokens=125),
+            model="claude-haiku-5-5",
         )
         self.messages = SimpleNamespace(create=self._create)
 
@@ -185,7 +202,7 @@ CONFIG = scorer.ScoringConfig("claude-haiku-5-5", "low", max_doc_chars=9480, max
 DOCUMENT = {
     "doc_id": "doc1",
     "issuer": "Veolia",
-    "revenue_eur_bn": 26.0,
+    "size": "about EUR 26 billion",
     "title": "Résultats",
     "text": "Chiffre d'affaires +8 %.",
 }
@@ -236,7 +253,8 @@ def test_bad_answers_are_recorded_as_problems_not_scores(
     result = run(FakeClient(answer, stop_reason), tmp_path)
     assert result["problem"].startswith(expected_problem)
     assert "tone" not in result
-    assert result["cost_usd"] > 0  # the call was still paid for and logged
+    # the call was still paid for and logged
+    assert spend.SpendLog(tmp_path / "spend.jsonl", 30).total_spent() > 0
 
 
 def test_thinking_setting_maps_to_the_api_parameters() -> None:
@@ -256,7 +274,7 @@ def base_request() -> dict:
 
 
 def test_cache_key_is_stable_for_the_same_request() -> None:
-    assert scorer.cache_key(base_request(), "v2", 1) == scorer.cache_key(base_request(), "v2", 1)
+    assert llm.cache_key(base_request(), "v2", 1) == llm.cache_key(base_request(), "v2", 1)
 
 
 def changed(path: list, value: object) -> dict:
@@ -288,7 +306,7 @@ def changed(path: list, value: object) -> dict:
 )
 def test_any_change_to_the_request_gives_a_new_cache_key(what, request_or_args) -> None:
     """An answer produced under one prompt, model or setting must never be reused for another."""
-    assert scorer.cache_key(*request_or_args) != scorer.cache_key(base_request(), "v2", 1), what
+    assert llm.cache_key(*request_or_args) != llm.cache_key(base_request(), "v2", 1), what
 
 
 def test_version_tag_spells_out_the_main_settings() -> None:
