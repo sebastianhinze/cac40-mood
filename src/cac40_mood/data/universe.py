@@ -5,6 +5,11 @@
 - LEIs come from the GLEIF registry (looked up by ISIN);
 - index-entry dates come from the composition history on fr.wikipedia "CAC 40" (CC BY-SA) and are
   only filled for firms that joined from 2017 on; an empty date means a long-standing member.
+- `revenue_2018_eur_bn` is the firm's rounded 2018 revenue in billion euros (net banking income
+  for the banks, gross revenues for AXA, the pro-forma figure for EssilorLuxottica), entered by
+  hand as an order of magnitude. The scoring prompt uses it so the model can judge how much a
+  piece of news matters for a firm of that size. It is fixed at the year before the sample
+  starts, so it never carries information from later years (DECISIONS #37).
 
 Why `isin_previous` matters: three firms changed ISIN after a share split inside the sample
 (Dassault Systèmes 2021, Eurofins 2020, Michelin 2022). Filtering the feed on the current ISIN
@@ -35,6 +40,7 @@ def load_universe(path: Path = UNIVERSE_CSV) -> pd.DataFrame:
     """Load the universe table, one row per firm, with dates parsed and empty cells as ''."""
     universe = pd.read_csv(path, dtype="string", keep_default_na=False)
     universe["index_entry_date"] = pd.to_datetime(universe["index_entry_date"], errors="coerce")
+    universe["revenue_2018_eur_bn"] = universe["revenue_2018_eur_bn"].astype(float)
     if universe["firm_id"].duplicated().any():
         raise ValueError("universe.csv has a duplicated firm_id")
     return universe

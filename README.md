@@ -34,6 +34,13 @@ uv run python -m cac40_mood.data.build texts            # -> data/processed/text
 uv run jupyter nbconvert --to html --execute notebooks/01_data_quality.ipynb --output-dir reports
 ```
 
+## Label the gold set (phase 2)
+```bash
+uv run streamlit run app/label_gold.py
+```
+Shows 40 documents one at a time (company, title, text) and stores my tone (−2 to +2) and topic in
+`data/processed/gold/labels.csv`. No model score is shown.
+
 ## Docs
 - [PROJECT_SPEC.md](PROJECT_SPEC.md): research questions, methods, evaluation rules
 - [PLAN.md](PLAN.md): build phases and done-when criteria

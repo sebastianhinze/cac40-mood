@@ -63,5 +63,5 @@ def load_settings(env_file: Path | None = None) -> Settings:
         llm_reference_model=os.getenv("LLM_REFERENCE_MODEL", "claude-sonnet-5-5"),
         llm_spend_cap_usd=float(os.getenv("LLM_SPEND_CAP_USD", "30")),
         llm_pilot_size=int(os.getenv("LLM_PILOT_SIZE", "20")),
-        llm_max_doc_tokens=int(os.getenv("LLM_MAX_DOC_TOKENS", "4000")),
+        llm_max_doc_tokens=int(os.getenv("LLM_MAX_DOC_TOKENS", "12000")),
     )

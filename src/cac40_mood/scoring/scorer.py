@@ -1,11 +1,16 @@
 """Score one document: cache lookup, spend-cap check, one API call, validation, logging.
 
 Order of operations for every document:
-1. build the exact message that would be sent;
-2. look it up in the disk cache (key = sha256 of model + version tag + message) and return the
-   stored answer if it exists, so the same document is never paid for twice;
+1. build the exact request that would be sent;
+2. look it up in the disk cache and return the stored answer if it exists, so the same
+   document is never paid for twice;
 3. otherwise check the spend cap against the request's worst-case cost;
 4. call the API with a JSON schema, validate the answer, log tokens and cost, store it.
+
+The cache key is a hash of the complete request: model, instructions, JSON schema, thinking
+setting, output limit and the message with the document text. Changing any of them, however
+slightly, gives a different key, so answers produced under one prompt or setting can never be
+returned for another (DECISIONS #34).
 """
 
 from __future__ import annotations
@@ -26,12 +31,11 @@ from cac40_mood.scoring.spend import SpendLog, worst_case_cost_usd
 
 @dataclass(frozen=True)
 class ScoringConfig:
-    """Everything that defines "how" a document is scored. All of it goes into the cache key.
+    """Everything that defines "how" a document is scored.
 
     - `thinking`: "off" (no reasoning before the answer) or an effort level such as "low" or
       "medium" (the model may reason first; that reasoning is billed as output tokens).
     - `max_doc_chars`: where the document text is cut.
-    - `outlook_chars`: if > 0, also send this much of the outlook section found after the cut.
     - `repeat`: 1 for normal runs. The pilot scores a document a second time with repeat=2 to
       measure how much the scores move between two identical requests (the model cannot be
       made deterministic: this model family does not accept a temperature setting).
@@ -42,25 +46,14 @@ class ScoringConfig:
     max_doc_chars: int
     max_output_tokens: int
     repeat: int = 1
-    outlook_chars: int = 0
 
     @property
     def version_tag(self) -> str:
-        tag = f"{PROMPT_VERSION}|thinking={self.thinking}|chars={self.max_doc_chars}"
-        if self.outlook_chars:
-            tag += f"|outlook={self.outlook_chars}"
-        return f"{tag}|rep={self.repeat}"
-
-
-def cache_key(model: str, version_tag: str, user_message: str) -> str:
-    """sha256 over model, version tag and the exact text sent (CLAUDE.md cache rule)."""
-    joined = "\n".join([model, version_tag, user_message])
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-
-def cache_path(cache_dir: Path, key: str) -> Path:
-    """Two-character sub-folders keep any one folder from holding thousands of files."""
-    return cache_dir / key[:2] / f"{key}.json"
+        """Human-readable label for logs and result files (the cache uses the full hash)."""
+        return (
+            f"{PROMPT_VERSION}|thinking={self.thinking}|chars={self.max_doc_chars}"
+            f"|rep={self.repeat}"
+        )
 
 
 def request_arguments(config: ScoringConfig, user_message: str) -> dict[str, Any]:
@@ -81,6 +74,22 @@ def request_arguments(config: ScoringConfig, user_message: str) -> dict[str, Any
     }
 
 
+def cache_key(request: dict[str, Any], prompt_version: str, repeat: int) -> str:
+    """sha256 over the prompt version, the repeat number and the complete request.
+
+    The request is written as JSON with sorted keys so the same request always gives the same
+    text, and therefore the same hash.
+    """
+    canonical_request = json.dumps(request, sort_keys=True, ensure_ascii=False)
+    joined = "\n".join([prompt_version, f"repeat={repeat}", canonical_request])
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def cache_path(cache_dir: Path, key: str) -> Path:
+    """Two-character sub-folders keep any one folder from holding thousands of files."""
+    return cache_dir / key[:2] / f"{key}.json"
+
+
 def parse_response(response: anthropic.types.Message) -> tuple[DocumentScore | None, str]:
     """Return (validated score or None, problem description or '')."""
     if response.stop_reason != "end_turn":
@@ -95,18 +104,23 @@ def parse_response(response: anthropic.types.Message) -> tuple[DocumentScore | N
 def score_document(
     client: anthropic.Anthropic,
     config: ScoringConfig,
-    doc_id: str,
-    title: str,
-    text: str,
+    document: dict[str, Any],
     cache_dir: Path,
     spend_log: SpendLog,
 ) -> dict[str, Any]:
-    """Score one document (from cache if possible) and return a flat result record."""
+    """Score one document (from cache if possible) and return a flat result record.
+
+    `document` needs the keys doc_id, issuer, revenue_eur_bn, title and text.
+    """
     user_message, was_cut = build_user_message(
-        title, text, config.max_doc_chars, config.outlook_chars
+        document["issuer"],
+        document["revenue_eur_bn"],
+        document["title"],
+        document["text"],
+        config.max_doc_chars,
     )
-    key = cache_key(config.model, config.version_tag, user_message)
-    path = cache_path(cache_dir, key)
+    request = request_arguments(config, user_message)
+    path = cache_path(cache_dir, cache_key(request, PROMPT_VERSION, config.repeat))
     if path.exists():
         return {**json.loads(path.read_text()), "from_cache": True}
 
@@ -114,17 +128,17 @@ def score_document(
         config.model, len(SYSTEM_PROMPT) + len(user_message), config.max_output_tokens
     )
     spend_log.check_can_spend(worst_case)
-    response = client.messages.create(**request_arguments(config, user_message))
+    response = client.messages.create(**request)
     score, problem = parse_response(response)
     cost = spend_log.record(
         config.model,
         config.version_tag,
-        doc_id,
+        document["doc_id"],
         response.usage.input_tokens,
         response.usage.output_tokens,
     )
     record: dict[str, Any] = {
-        "doc_id": doc_id,
+        "doc_id": document["doc_id"],
         "model": config.model,
         "version_tag": config.version_tag,
         "truncated": was_cut,

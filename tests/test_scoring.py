@@ -13,7 +13,13 @@ from pydantic import ValidationError
 
 from cac40_mood.scoring import agreement as ag
 from cac40_mood.scoring import prompt, scorer, spend
-from cac40_mood.scoring.schema import SCORE_JSON_SCHEMA, TOPICS, DocumentScore, Topic
+from cac40_mood.scoring.schema import (
+    SCORE_JSON_SCHEMA,
+    TOPICS,
+    DocumentScore,
+    Topic,
+    clean_rationale,
+)
 
 GOOD_ANSWER = {
     "tone": 0.4,
@@ -48,6 +54,20 @@ def test_out_of_range_or_unknown_values_are_rejected(field, bad_value) -> None:
         DocumentScore.model_validate({**GOOD_ANSWER, field: bad_value})
 
 
+@pytest.mark.parametrize(
+    ("raw", "cleaned"),
+    [
+        ("Revenue up 8%, guidance confirmed.}", "Revenue up 8%, guidance confirmed."),
+        ("The gain is tempered.</reasoning_effort>", "The gain is tempered."),
+        ('Margin fell 110bp."} ', "Margin fell 110bp."),
+        ("Nothing to remove (see table).", "Nothing to remove (see table)."),
+    ],
+)
+def test_stray_characters_are_removed_from_the_end_of_the_rationale(raw, cleaned) -> None:
+    assert clean_rationale(raw) == cleaned
+    assert DocumentScore.model_validate({**GOOD_ANSWER, "rationale": raw}).rationale == cleaned
+
+
 def test_api_schema_and_pydantic_model_describe_the_same_fields_and_topics() -> None:
     assert set(SCORE_JSON_SCHEMA["properties"]) == set(DocumentScore.model_fields)
     assert set(SCORE_JSON_SCHEMA["required"]) == set(DocumentScore.model_fields)
@@ -58,51 +78,57 @@ def test_api_schema_and_pydantic_model_describe_the_same_fields_and_topics() -> 
 # ------------------------------------------------------------------- prompt
 
 
-def test_short_text_is_sent_whole() -> None:
-    message, was_cut = prompt.build_user_message("Résultats 2023", "Chiffre d'affaires +8 %.", 100)
+def message(text: str, max_chars: int = 100) -> tuple[str, bool]:
+    return prompt.build_user_message("Veolia", 26, "Résultats 2023", text, max_chars)
+
+
+def test_short_text_is_sent_whole_with_issuer_and_size() -> None:
+    built, was_cut = message("Chiffre d'affaires +8 %.")
     assert not was_cut
-    assert message.startswith("Title: Résultats 2023")
-    assert "Chiffre d'affaires +8 %." in message
-    assert prompt.TRUNCATION_NOTE not in message
+    assert built == (
+        "Issuer: Veolia\n"
+        "Issuer's approximate annual revenue: about EUR 26 billion\n"
+        "Title: Résultats 2023\n"
+        "\n<document>\nChiffre d'affaires +8 %.\n</document>"
+    )
 
 
 def test_long_text_is_cut_and_the_model_is_told() -> None:
     text = "a" * 96 + "\n" + "b" * 50
     cut, was_cut = prompt.truncate_text(text, 100)
     assert was_cut and cut == "a" * 96  # steps back to the line break just before the limit
-    message, _ = prompt.build_user_message("T", text, 100)
-    assert prompt.TRUNCATION_NOTE in message and "bbb" not in message
+    built, _ = message(text)
+    assert prompt.TRUNCATION_NOTE in built and "bbb" not in built
 
 
 def test_cut_does_not_step_back_to_a_far_away_line_break() -> None:
-    text = "a" * 10 + "\n" + "b" * 200
-    cut, _ = prompt.truncate_text(text, 100)
+    cut, _ = prompt.truncate_text("a" * 10 + "\n" + "b" * 200, 100)
     assert len(cut) == 100
 
 
-def test_outlook_section_after_the_cut_can_be_appended() -> None:
-    text = (
-        "Résultats annuels\n" + "x" * 300 + "\nPerspectives 2024\nLe Groupe vise +5 %.\n" + "y" * 80
-    )
-    message, was_cut = prompt.build_user_message("T", text, 100, outlook_chars=40)
-    assert was_cut
-    assert prompt.OMISSION_NOTE in message
-    assert "Perspectives 2024\nLe Groupe vise +5 %." in message
-    without, _ = prompt.build_user_message("T", text, 100)
-    assert "Perspectives 2024" not in without
+@pytest.mark.parametrize(
+    ("revenue_bn", "expected"),
+    [
+        (177, "about EUR 177 billion"),
+        (4.8, "about EUR 4.8 billion"),
+        (0.6, "about EUR 600 million"),
+    ],
+)
+def test_size_is_described_in_round_numbers(revenue_bn, expected) -> None:
+    assert prompt.describe_size(revenue_bn) == expected
 
 
-def test_outlook_heading_must_be_a_short_line() -> None:
-    assert prompt.OUTLOOK_HEADING.search("Objectifs 2025 confirmés")
-    assert prompt.OUTLOOK_HEADING.search("2024 Outlook")
-    long_sentence = "x" * 60 + " perspectives " + "y" * 60
-    assert prompt.OUTLOOK_HEADING.search(long_sentence) is None
+def test_message_carries_no_date() -> None:
+    """Issuer, size, title and text go to the model; a date would invite hindsight."""
+    built, _ = message("Texte.")
+    assert "20" not in built.replace("Résultats 2023", "").replace("EUR 26", "")
 
 
-def test_message_carries_no_date_or_firm_identifier() -> None:
-    """Only the title and the text go to the model: a date would invite hindsight."""
-    message, _ = prompt.build_user_message("Communiqué", "Texte.", 100)
-    assert message == "Title: Communiqué\n\n<document>\nTexte.\n</document>"
+def test_prompt_names_every_topic_and_the_issuer_perspective() -> None:
+    for topic in TOPICS:
+        assert f"  {topic}:" in prompt.SYSTEM_PROMPT
+    assert "issuer's own shareholders" in prompt.SYSTEM_PROMPT
+    assert "no basis to judge" in prompt.SYSTEM_PROMPT
 
 
 # -------------------------------------------------------------------- spend
@@ -156,13 +182,18 @@ class FakeClient:
 
 
 CONFIG = scorer.ScoringConfig("claude-haiku-5-5", "low", max_doc_chars=9480, max_output_tokens=600)
+DOCUMENT = {
+    "doc_id": "doc1",
+    "issuer": "Veolia",
+    "revenue_eur_bn": 26.0,
+    "title": "Résultats",
+    "text": "Chiffre d'affaires +8 %.",
+}
 
 
 def run(client: FakeClient, tmp_path, cap_usd: float = 30.0, config=CONFIG) -> dict:
     log = spend.SpendLog(tmp_path / "spend.jsonl", cap_usd)
-    return scorer.score_document(
-        client, config, "doc1", "Résultats", "Chiffre d'affaires +8 %.", tmp_path / "cache", log
-    )
+    return scorer.score_document(client, config, DOCUMENT, tmp_path / "cache", log)
 
 
 def test_first_call_is_paid_and_second_comes_from_the_cache(tmp_path) -> None:
@@ -175,7 +206,7 @@ def test_first_call_is_paid_and_second_comes_from_the_cache(tmp_path) -> None:
     assert spend.SpendLog(tmp_path / "spend.jsonl", 30).total_spent() == pytest.approx(0.0004625)
 
 
-def test_a_different_setting_is_a_different_cache_entry(tmp_path) -> None:
+def test_a_repeat_run_is_a_different_cache_entry(tmp_path) -> None:
     client = FakeClient(json.dumps(GOOD_ANSWER))
     run(client, tmp_path)
     repeat = scorer.ScoringConfig("claude-haiku-5-5", "low", 9480, 600, repeat=2)
@@ -220,31 +251,48 @@ def test_thinking_setting_maps_to_the_api_parameters() -> None:
     assert "temperature" not in arguments  # this model family rejects sampling settings
 
 
-def test_cache_key_changes_with_model_version_tag_and_text() -> None:
-    base = scorer.cache_key("model-a", "v1", "text")
-    assert base == scorer.cache_key("model-a", "v1", "text")
-    assert (
-        len(
-            {
-                base,
-                *(
-                    scorer.cache_key(*args)
-                    for args in [
-                        ("model-b", "v1", "text"),
-                        ("model-a", "v2", "text"),
-                        ("model-a", "v1", "text!"),
-                    ]
-                ),
-            }
-        )
-        == 4
-    )
+def base_request() -> dict:
+    return scorer.request_arguments(CONFIG, "Issuer: Veolia\nTitle: T\n<document>x</document>")
 
 
-def test_version_tag_spells_out_every_setting() -> None:
-    assert CONFIG.version_tag == "v1|thinking=low|chars=9480|rep=1"
-    with_outlook = scorer.ScoringConfig("m", "low", 9480, 600, outlook_chars=4740)
-    assert with_outlook.version_tag == "v1|thinking=low|chars=9480|outlook=4740|rep=1"
+def test_cache_key_is_stable_for_the_same_request() -> None:
+    assert scorer.cache_key(base_request(), "v2", 1) == scorer.cache_key(base_request(), "v2", 1)
+
+
+def changed(path: list, value: object) -> dict:
+    """A copy of the base request with one nested value replaced."""
+    request = json.loads(json.dumps(base_request()))
+    target = request
+    for step in path[:-1]:
+        target = target[step]
+    target[path[-1]] = value
+    return request
+
+
+@pytest.mark.parametrize(
+    ("what", "request_or_args"),
+    [
+        ("model", (changed(["model"], "claude-sonnet-5-5"), "v2", 1)),
+        ("instructions", (changed(["system"], "A different prompt."), "v2", 1)),
+        ("document text", (changed(["messages", 0, "content"], "other text"), "v2", 1)),
+        ("thinking mode", (changed(["thinking"], {"type": "disabled"}), "v2", 1)),
+        ("effort", (changed(["output_config", "effort"], "medium"), "v2", 1)),
+        ("output limit", (changed(["max_tokens"], 4000), "v2", 1)),
+        (
+            "schema",
+            (changed(["output_config", "format", "schema", "required"], ["tone"]), "v2", 1),
+        ),
+        ("prompt version label", (base_request(), "v3", 1)),
+        ("repeat number", (base_request(), "v2", 2)),
+    ],
+)
+def test_any_change_to_the_request_gives_a_new_cache_key(what, request_or_args) -> None:
+    """An answer produced under one prompt, model or setting must never be reused for another."""
+    assert scorer.cache_key(*request_or_args) != scorer.cache_key(base_request(), "v2", 1), what
+
+
+def test_version_tag_spells_out_the_main_settings() -> None:
+    assert CONFIG.version_tag == f"{prompt.PROMPT_VERSION}|thinking=low|chars=9480|rep=1"
 
 
 # ---------------------------------------------------------------- agreement

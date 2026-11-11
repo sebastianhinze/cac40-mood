@@ -9,23 +9,26 @@ Two descriptions of the same thing live here on purpose:
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-# Fixed topic list (DECISIONS #30). Kept short so every topic has enough documents later.
+# Fixed topic list (DECISIONS #30, extended in #36). Kept short so every topic has enough
+# documents later. The wording the model sees for each topic is in prompt.py.
 TOPICS: tuple[str, ...] = (
-    "results",  # annual, half-year or quarterly earnings
-    "sales_update",  # revenue / trading update without full earnings
-    "guidance",  # outlook or targets set, confirmed, raised, cut or withdrawn
-    "m_and_a",  # acquisitions, disposals, mergers, takeover bids
-    "financing",  # bonds, loans, capital increases, ratings
-    "shareholder_returns",  # dividends, buyback programmes
-    "contract_win",  # orders, contracts, partnerships, product approvals
-    "strategy_operations",  # strategy plans, restructuring, plants, capital markets days
-    "governance",  # board and management changes, AGM matters, remuneration
-    "legal_regulatory",  # litigation, fines, investigations, regulatory decisions
-    "esg",  # sustainability, climate, social commitments
+    "results",
+    "sales_update",
+    "guidance",
+    "m_and_a",
+    "financing",
+    "shareholder_returns",
+    "contract_win",
+    "product_pipeline",
+    "strategy_operations",
+    "governance",
+    "legal_regulatory",
+    "esg",
     "other",
 )
 
@@ -37,12 +40,23 @@ Topic = Literal[
     "financing",
     "shareholder_returns",
     "contract_win",
+    "product_pipeline",
     "strategy_operations",
     "governance",
     "legal_regulatory",
     "esg",
     "other",
 ]
+
+# The model occasionally leaks a closing brace, bracket, quote or a tag-like fragment such as
+# "</something>" into the end of the last text field. Those characters are never part of a
+# sentence, so they are removed from the end of the rationale.
+TRAILING_JUNK = re.compile(r"(\s|[}\]\"'`]|</?[A-Za-z_][A-Za-z0-9_]*>)+$")
+
+
+def clean_rationale(text: str) -> str:
+    """Strip stray closing characters and tags from the end of the rationale."""
+    return TRAILING_JUNK.sub("", text).strip()
 
 
 class DocumentScore(BaseModel):
@@ -55,6 +69,11 @@ class DocumentScore(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
 
+    @field_validator("rationale")
+    @classmethod
+    def _clean_rationale(cls, value: str) -> str:
+        return clean_rationale(value)
+
 
 SCORE_JSON_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -64,7 +83,7 @@ SCORE_JSON_SCHEMA: dict[str, object] = {
         "uncertainty": {"type": "number", "description": "0 (certain) to 1 (very uncertain)"},
         "topic": {"type": "string", "enum": list(TOPICS)},
         "confidence": {"type": "number", "description": "0 to 1"},
-        "rationale": {"type": "string", "description": "At most 30 words, in English"},
+        "rationale": {"type": "string", "description": "One plain sentence, at most 30 words"},
     },
     "required": ["tone", "surprise", "uncertainty", "topic", "confidence", "rationale"],
     "additionalProperties": False,

@@ -150,3 +150,6 @@ Some members (e.g. Bureau Veritas, Eiffage, Euronext) joined the index during th
   measures that noise by scoring twice.
 - Do not run two scoring jobs at once: both can miss the cache for the same document and pay for it twice (this
   happened once in the pilot, cost $0.0004).
+- **Prompt v2 at the 12,000-token cap (same day):** fixed overhead about 2,170 input tokens per request (longer
+  instructions), about 122 output tokens. Full run of 7,223 documents: **$5.08 standard / $2.54 batch**.
+  Pilot spend to date: $1.39 (v1 and v2 pilots, two Sonnet comparisons).

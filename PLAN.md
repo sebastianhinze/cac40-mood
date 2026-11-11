@@ -6,7 +6,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
 | 1 Data | 3–4 | ✅ 2026-11-11 |
-| 2 Scoring | 3 | 🟡 pilot steps done 2026-11-11 (tokens, thinking, truncation, Sonnet check); waiting for my review before the bulk run |
+| 2 Scoring | 3 | 🟡 prompt v2 piloted 2026-11-11, gold-set page ready; waiting for my OK for the bulk run and for my labels |
 | 3 Event study | 2 | ⬜ |
 | 4 Volatility | 3 | ⬜ |
 | 5 Particle filter | 4 | ⬜ |

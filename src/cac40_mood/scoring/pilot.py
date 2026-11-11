@@ -1,15 +1,20 @@
 """Phase 2 pilot: small paid experiments that settle how the bulk run is configured.
 
-    uv run python -m cac40_mood.scoring.pilot count-tokens   # step 1: real token counts (free)
-    uv run python -m cac40_mood.scoring.pilot thinking       # step 3: thinking off vs low, twice
-    uv run python -m cac40_mood.scoring.pilot truncation     # step 2: short cap vs long cap
-    uv run python -m cac40_mood.scoring.pilot reference      # step 4: cheap model vs reference
+    uv run python -m cac40_mood.scoring.pilot count-tokens   # real token counts (free endpoint)
+    uv run python -m cac40_mood.scoring.pilot pilot          # 20 documents, scored twice
+    uv run python -m cac40_mood.scoring.pilot reference      # 50 documents, cheap vs reference
 
 Rules that hold for every step:
 - documents come from the train and validation periods only (never the test period);
 - every answer is cached on disk and every paid call is logged, so re-running a step is free;
-- the spend cap is checked before each request.
-Results are written to `data/processed/pilot/` as one table per step.
+- the spend cap is checked before each request;
+- run one step at a time: two jobs running together can both miss the cache for the same
+  document and pay for it twice.
+Results are written to `data/processed/pilot/`, one table per step and prompt version.
+
+Earlier pilot experiments (thinking off vs low, 4k vs 8k vs 12k token caps, a start-plus-outlook
+cut) were run with prompt v1; their code is in git history (commit 4dea98e) and their outcomes
+are DECISIONS #31 and #33.
 """
 
 from __future__ import annotations
@@ -21,8 +26,8 @@ import anthropic
 import pandas as pd
 
 from cac40_mood.config import CACHE_DIR, PROCESSED_DIR, load_settings
-from cac40_mood.data.build import FILINGS_PATH, TEXTS_PATH
-from cac40_mood.scoring.prompt import SYSTEM_PROMPT, build_user_message
+from cac40_mood.scoring.prompt import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from cac40_mood.scoring.samples import chars_for_token_cap, pilot_sample, reference_sample
 from cac40_mood.scoring.scorer import ScoringConfig, score_document
 from cac40_mood.scoring.spend import SpendLog
 
@@ -30,61 +35,27 @@ LLM_CACHE_DIR: Path = CACHE_DIR / "llm"
 SPEND_LOG_PATH: Path = LLM_CACHE_DIR / "spend.jsonl"
 PILOT_DIR: Path = PROCESSED_DIR / "pilot"
 
-# Seeds are fixed so every step sees the same documents on every run.
-PILOT_SEED: int = 20
-REFERENCE_SEED: int = 50
-REFERENCE_SIZE: int = 50
+# Thinking setting chosen in the pilot (DECISIONS #31) and used for the bulk run.
+THINKING: str = "low"
 
-# Measured in step 1 on the 20 pilot documents (DECISIONS #31): French filing text has a median
-# of 2.37 characters per token for this model family (range 2.0-2.75). Used to turn the token
-# cap into a character cap, so that documents can be cut offline and deterministically.
-CHARS_PER_TOKEN: float = 2.37
-
-LONG_CAP_TOKENS: int = 12_000
-
-# Room for the JSON answer (about 150 tokens) plus, when thinking is on, the reasoning.
-MAX_OUTPUT_TOKENS_NO_THINKING: int = 600
-MAX_OUTPUT_TOKENS_THINKING: int = 4_000
-
-
-def scoreable_documents() -> pd.DataFrame:
-    """Documents to score with usable text, joined to their text, train and validation only."""
-    filings = pd.read_parquet(FILINGS_PATH)
-    texts = pd.read_parquet(TEXTS_PATH)
-    documents = filings[~filings["is_admin"]].merge(texts, on="doc_id")
-    usable = documents["text_quality"] == "ok"
-    in_train_or_val = documents["split"].isin(["train", "val"])
-    return documents[usable & in_train_or_val].reset_index(drop=True)
-
-
-def pilot_sample(size: int) -> pd.DataFrame:
-    """The pilot documents: a fixed random draw from the train period."""
-    documents = scoreable_documents()
-    return documents[documents["split"] == "train"].sample(size, random_state=PILOT_SEED)
-
-
-def reference_sample() -> pd.DataFrame:
-    """A fixed random draw from train and validation for the reference-model comparison."""
-    return scoreable_documents().sample(REFERENCE_SIZE, random_state=REFERENCE_SEED)
-
-
-def chars_for_token_cap(token_cap: int) -> int:
-    return int(token_cap * CHARS_PER_TOKEN)
+# Room for the JSON answer (about 125 tokens) plus any reasoning the model does first.
+MAX_OUTPUT_TOKENS: int = 4_000
 
 
 def score_many(
     client: anthropic.Anthropic, config: ScoringConfig, documents: pd.DataFrame, spend_log: SpendLog
 ) -> pd.DataFrame:
     """Score each row of `documents` with one configuration; return one result row per doc."""
+    columns = ["doc_id", "issuer", "revenue_eur_bn", "title", "text"]
     records = [
-        score_document(client, config, row.doc_id, row.title, row.text, LLM_CACHE_DIR, spend_log)
-        for row in documents.itertuples()
+        score_document(client, config, document, LLM_CACHE_DIR, spend_log)
+        for document in documents[columns].to_dict("records")
     ]
     return pd.DataFrame(records)
 
 
 def count_tokens_step(client: anthropic.Anthropic) -> pd.DataFrame:
-    """Step 1: count real tokens of the pilot documents with the token-counting endpoint.
+    """Count real tokens of the pilot documents with the token-counting endpoint.
 
     The endpoint is free and generates nothing. Each document is counted twice: uncut (to
     learn the characters-per-token ratio and how many documents exceed the cap) and cut at
@@ -95,8 +66,12 @@ def count_tokens_step(client: anthropic.Anthropic) -> pd.DataFrame:
     cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
     rows = []
     for row in documents.itertuples():
-        full_message, _ = build_user_message(row.title, row.text, max_chars=10**9)
-        cut_message, was_cut = build_user_message(row.title, row.text, max_chars=cap_chars)
+        full_message, _ = build_user_message(
+            row.issuer, row.revenue_eur_bn, row.title, row.text, max_chars=10**9
+        )
+        cut_message, was_cut = build_user_message(
+            row.issuer, row.revenue_eur_bn, row.title, row.text, max_chars=cap_chars
+        )
         document_only = client.messages.count_tokens(
             model=settings.llm_model, messages=[{"role": "user", "content": full_message}]
         ).input_tokens
@@ -118,79 +93,41 @@ def count_tokens_step(client: anthropic.Anthropic) -> pd.DataFrame:
         )
     result = pd.DataFrame(rows)
     PILOT_DIR.mkdir(parents=True, exist_ok=True)
-    result.to_parquet(PILOT_DIR / "token_counts.parquet", index=False)
+    result.to_parquet(PILOT_DIR / f"token_counts_{PROMPT_VERSION}.parquet", index=False)
     return result
 
 
-def thinking_step(client: anthropic.Anthropic, spend_log: SpendLog) -> pd.DataFrame:
-    """Step 3: the pilot documents with thinking off and at low effort, each scored twice."""
+def pilot_step(client: anthropic.Anthropic, spend_log: SpendLog) -> pd.DataFrame:
+    """The pilot documents scored twice with the bulk-run configuration.
+
+    The second pass is not a duplicate by accident: comparing the two passes shows how much
+    scores move between identical requests, which is the yardstick for every other comparison.
+    """
     settings = load_settings()
     documents = pilot_sample(settings.llm_pilot_size)
     cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
     tables = []
-    for thinking, max_output in [
-        ("off", MAX_OUTPUT_TOKENS_NO_THINKING),
-        ("low", MAX_OUTPUT_TOKENS_THINKING),
-    ]:
-        for repeat in (1, 2):
-            config = ScoringConfig(settings.llm_model, thinking, cap_chars, max_output, repeat)
-            scores = score_many(client, config, documents, spend_log)
-            tables.append(scores.assign(thinking=thinking, repeat=repeat))
+    for repeat in (1, 2):
+        config = ScoringConfig(settings.llm_model, THINKING, cap_chars, MAX_OUTPUT_TOKENS, repeat)
+        tables.append(score_many(client, config, documents, spend_log).assign(repeat=repeat))
     result = pd.concat(tables, ignore_index=True)
     PILOT_DIR.mkdir(parents=True, exist_ok=True)
-    result.to_parquet(PILOT_DIR / "thinking.parquet", index=False)
+    result.to_parquet(PILOT_DIR / f"pilot_{PROMPT_VERSION}.parquet", index=False)
     return result
 
 
-def truncation_step(
-    client: anthropic.Anthropic, spend_log: SpendLog, thinking: str
-) -> pd.DataFrame:
-    """Step 2: documents longer than the cap, scored under four ways of shortening them.
-
-    Uses every document from the pilot and reference samples that is longer than the cap.
-    The 12,000-token version is the yardstick: the closer a cheaper variant's scores are to
-    it, the less is lost by not reading further.
-    """
-    settings = load_settings()
-    cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
-    candidates = pd.concat([pilot_sample(settings.llm_pilot_size), reference_sample()])
-    candidates = candidates.drop_duplicates("doc_id")
-    long_documents = candidates[candidates["text"].str.len() > cap_chars]
-    max_output = MAX_OUTPUT_TOKENS_NO_THINKING if thinking == "off" else MAX_OUTPUT_TOKENS_THINKING
-    # (label, characters kept from the start, characters of the outlook section added)
-    variants = [
-        ("cap_4k", cap_chars, 0),
-        ("cap_8k", chars_for_token_cap(8_000), 0),
-        ("start_4k_plus_outlook_2k", cap_chars, chars_for_token_cap(2_000)),
-        ("cap_12k", chars_for_token_cap(LONG_CAP_TOKENS), 0),
-    ]
-    tables = []
-    for label, chars, outlook_chars in variants:
-        config = ScoringConfig(
-            settings.llm_model, thinking, chars, max_output, outlook_chars=outlook_chars
-        )
-        scores = score_many(client, config, long_documents, spend_log)
-        tables.append(scores.assign(cap=label))
-    result = pd.concat(tables, ignore_index=True)
-    result.to_parquet(PILOT_DIR / "truncation.parquet", index=False)
-    return result
-
-
-def reference_step(client: anthropic.Anthropic, spend_log: SpendLog, thinking: str) -> pd.DataFrame:
-    """Step 4: 50 documents scored by the cheap model and by the reference model.
+def reference_step(client: anthropic.Anthropic, spend_log: SpendLog) -> pd.DataFrame:
+    """50 documents scored by the cheap model and by the reference model, same prompt and cut.
 
     The reference model reasons at medium effort. No automatic fallback to another model is
     configured: a silent switch would make "agreement with the reference" meaningless, so a
-    refusal is simply recorded as a problem.
+    refusal is simply recorded as a problem (DECISIONS #35).
     """
     settings = load_settings()
     documents = reference_sample()
     cap_chars = chars_for_token_cap(settings.llm_max_doc_tokens)
-    max_output = MAX_OUTPUT_TOKENS_NO_THINKING if thinking == "off" else MAX_OUTPUT_TOKENS_THINKING
-    cheap = ScoringConfig(settings.llm_model, thinking, cap_chars, max_output)
-    reference = ScoringConfig(
-        settings.llm_reference_model, "medium", cap_chars, MAX_OUTPUT_TOKENS_THINKING
-    )
+    cheap = ScoringConfig(settings.llm_model, THINKING, cap_chars, MAX_OUTPUT_TOKENS)
+    reference = ScoringConfig(settings.llm_reference_model, "medium", cap_chars, MAX_OUTPUT_TOKENS)
     result = pd.concat(
         [
             score_many(client, cheap, documents, spend_log).assign(role="cheap"),
@@ -198,26 +135,24 @@ def reference_step(client: anthropic.Anthropic, spend_log: SpendLog, thinking: s
         ],
         ignore_index=True,
     )
-    result.to_parquet(PILOT_DIR / "reference.parquet", index=False)
+    PILOT_DIR.mkdir(parents=True, exist_ok=True)
+    result.to_parquet(PILOT_DIR / f"reference_{PROMPT_VERSION}.parquet", index=False)
     return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Phase 2 pilot experiments.")
-    parser.add_argument("step", choices=["count-tokens", "thinking", "truncation", "reference"])
-    parser.add_argument("--thinking", default="off", help="setting used in steps 2 and 4")
+    parser.add_argument("step", choices=["count-tokens", "pilot", "reference"])
     args = parser.parse_args()
     settings = load_settings()
     client = anthropic.Anthropic()
     spend_log = SpendLog(SPEND_LOG_PATH, settings.llm_spend_cap_usd)
     if args.step == "count-tokens":
         result = count_tokens_step(client)
-    elif args.step == "thinking":
-        result = thinking_step(client, spend_log)
-    elif args.step == "truncation":
-        result = truncation_step(client, spend_log, args.thinking)
+    elif args.step == "pilot":
+        result = pilot_step(client, spend_log)
     else:
-        result = reference_step(client, spend_log, args.thinking)
+        result = reference_step(client, spend_log)
     print(f"{args.step}: {len(result)} rows; total spent so far ${spend_log.total_spent():.4f}")
 
 
