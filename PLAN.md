@@ -5,7 +5,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 | Phase | Effort | Status |
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
-| 1 Data | 3–4 | ✅ 2026-11-11 (admin list #21 still under review) |
+| 1 Data | 3–4 | ✅ 2026-11-11 |
 | 2 Scoring | 3 | ⬜ |
 | 3 Event study | 2 | ⬜ |
 | 4 Volatility | 3 | ⬜ |
