@@ -12,13 +12,26 @@ volatility beyond what a HAR/GARCH model already predicts?
   particle filter on irregularly timed LLM observations.
 - Streamlit dashboard.
 
-**Status:** phase 0 (setup) done. See [PLAN.md](PLAN.md).
+**Status:** phase 1 (data) built, waiting for review. See [PLAN.md](PLAN.md).
 
 ## Quick start
 ```bash
 uv sync --all-groups
 cp .env.example .env   # add ANTHROPIC_API_KEY
 uv run pytest
+```
+
+## Rebuild the data (phase 1)
+Network steps only add files under `data/raw/`; the others are deterministic and run offline.
+```bash
+uv run python -m cac40_mood.data.build fetch-tarballs   # DILA archive Jan 2019 - Jun 2020 (14.6 GB read, ~100 min)
+uv run python -m cac40_mood.data.build fetch-api        # API metadata 2019-2025 (under a minute)
+uv run python -m cac40_mood.data.build fetch-prices     # yfinance OHLC, 37 firms + ^FCHI
+uv run python -m cac40_mood.data.build prices           # -> data/processed/prices.parquet
+uv run python -m cac40_mood.data.build filings          # -> data/processed/filings.parquet
+uv run python -m cac40_mood.data.build fetch-pdfs       # PDFs of the documents to score (~100 min)
+uv run python -m cac40_mood.data.build texts            # -> data/processed/texts.parquet
+uv run jupyter nbconvert --to html --execute notebooks/01_data_quality.ipynb --output-dir reports
 ```
 
 ## Docs

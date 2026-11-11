@@ -30,6 +30,9 @@ The key control in RQ3: announcements alone raise volatility (earnings days are 
   - Language: French version when it exists, otherwise English. FR/EN duplicates are dropped and `lang` kept as a column.
   - Timestamp: conservative = **latest** of the provided UTC timestamps, converted to Europe/Paris.
 - **Prices:** yfinance daily OHLC + Adj Close for 37 `.PA` tickers + `^FCHI`. The trading calendar comes from `^FCHI` dates.
+- **Phase 1 amendments (2026-11-11):** URW has no usable price history before 2023-04, so the main analysis uses
+  **36 firms** (DECISIONS #29). The filings feed is nearly empty from 5 Mar to 15 Jun 2020; that window is excluded
+  and treated as missing data, with a robustness run starting 2020-07-01 (DECISIONS #28).
 
 ## 3. Methods
 

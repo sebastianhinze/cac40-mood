@@ -10,11 +10,12 @@ requires-python = ">=3.12"
 dependencies = [
     "anthropic",
     "arch",
+    "matplotlib>=3.11.2",
     "numpy",
     "pandas",
     "pyarrow",
     "pydantic",
-    "pypdf",
+    "pypdfium2>=5.15.2",
     "python-dotenv",
     "requests",
     "scipy",
@@ -25,6 +26,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel",
+    "nbconvert>=7.17.2",
+    "nbformat>=5.11.1",
     "pytest",
     "ruff",
 ]
@@ -54,4 +57,5 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "NPY", "PD", "RUF", "ANN"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN"]
-"notebooks/**" = ["ANN"]
+# Notebooks hold long chart captions and display calls, so the line-length rule is off there.
+"notebooks/**" = ["ANN", "E501"]

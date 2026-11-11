@@ -5,7 +5,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 | Phase | Effort | Status |
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
-| 1 Data | 3–4 | ⬜ |
+| 1 Data | 3–4 | ✅ 2026-11-11 (admin list #21 still under review) |
 | 2 Scoring | 3 | ⬜ |
 | 3 Event study | 2 | ⬜ |
 | 4 Volatility | 3 | ⬜ |
@@ -38,11 +38,14 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 ## Phase 3: Event study
 - Market-model ARs, CAR[0], CAR[+1,+5], placebo CAR[−5,−1]. Tercile CAR-path plots by tone.
 - Cross-sectional regressions with date-clustered SEs. Only train+val periods are used for exploration.
+- Feed gap (DECISIONS #28): events inside 5 Mar – 15 Jun 2020 are left out. Robustness: sample from 2020-07-01. URW is out (#29).
 - **Done when:** RQ1/RQ2 results tables + plots are generated from one script, with tests for the AR computation on synthetic data.
 
 ## Phase 4: Volatility
 - Garman–Klass / Parkinson RV. HAR B0, B1 (+event dummies), M (+scores). GARCH-X robustness.
 - Rolling out-of-sample on validation. QLIKE/MSE, DM tests, MZ regressions.
+- Feed gap (#28): announcement features are MISSING in the window (not zero) and those days are left out of estimation and
+  evaluation. Robustness: sample from 2020-07-01. 36 firms (#29).
 - **Done when:** a validation-period comparison table B0/B1/M at h = 1, 5, 22 exists, the feature pipeline passes a
   "no future information" test (shifting the data by one day changes no past feature), and the config is frozen for phase 6.
 
@@ -52,6 +55,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
   log-likelihood is stable across seeds.
 - Market + firm structure (decide: joint PF vs. two-stage vs. Rao-Blackwellised). Robust observation model.
 - Fit on train, filter through val. Mood features → HAR model M2.
+- Feed gap (#28): the filter runs predict-only through the window (no observations, wider bands). Test this explicitly.
 - **Done when:** the tests pass, the validation comparison M vs. M2 is reported, and runtime for the full panel is under a few minutes on the M3.
 
 ## Phase 6: Final test evaluation (one shot)
