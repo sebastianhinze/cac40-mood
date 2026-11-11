@@ -8,7 +8,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 | 1 Data | 3–4 | ✅ 2026-11-11 |
 | 2 Scoring | 3 | 🟡 prompt v2 piloted 2026-11-11, gold-set page ready; waiting for my OK for the bulk run and for my labels |
 | 3 Event study | 2 | ⬜ |
-| 4 Volatility | 3 | ⬜ |
+| 4 Volatility | 3 | 🟡 baselines B0 (HAR) and GARCH done on validation 2026-11-11; B1/M wait for scores |
 | 5 Particle filter | 4 | ⬜ |
 | 6 Final test evaluation | 1 | ⬜ |
 | 7 Dashboard | 2 | ⬜ |
