@@ -135,3 +135,18 @@ Some members (e.g. Bureau Veritas, Eiffage, Euronext) joined the index during th
 | PyMuPDF | AGPL | 98–100% | 0.0–0.1% | 3.5 s |
 | pypdf | BSD | 97–99% | 0.6–1.8% | 15.8 s |
 | pdfplumber | MIT | 97–98% | 0.5–3.6% | 31.1 s |
+
+## 7. LLM scoring: measured in the phase 2 pilot (2026-11-11)
+- **Tokens:** French filing text has a median of **2.37 characters per token** on `claude-haiku-5-5` (20 documents, range
+  2.0–2.75; the one English document 2.75). The earlier guess of about 3 was too optimistic.
+- **Fixed overhead per request:** about 1,120 input tokens (instructions about 600, JSON schema about 520).
+- **Output:** about 125 tokens per document with thinking off or at low effort, on Haiku and on Sonnet alike.
+- **Prices (Anthropic pricing page):** Haiku 5.5 $0.10 / $0.50 per million input / output tokens for prompts up to 100k
+  tokens; Sonnet 5.5 $2 / $10. The Batches API costs half. The token-counting endpoint is free.
+- **Full run, 7,223 documents, measured token counts:** cap 4,000 tokens $3.06 standard / $1.53 batch; cap 8,000
+  $3.81 / $1.91; cap 12,000 $4.36 / $2.18.
+- **Pilot spend:** $0.57 in total (Haiku $0.13 for 209 calls, Sonnet $0.44 for 50 calls).
+- Haiku 5.5 rejects a temperature setting, so identical requests can return slightly different scores; the pilot
+  measures that noise by scoring twice.
+- Do not run two scoring jobs at once: both can miss the cache for the same document and pay for it twice (this
+  happened once in the pilot, cost $0.0004).
