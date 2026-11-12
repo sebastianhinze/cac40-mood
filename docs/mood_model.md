@@ -182,3 +182,82 @@ Code: `src/cac40_mood/mood/real.py`. Run: `uv run python -m cac40_mood.mood.real
 - **Forecasting value (validation):** adding the two mood columns to model M improves QLIKE at 1 day
   (p = 0.009) but not at the pre-registered 5 days (p = 0.28) and makes 22 days worse (not significant).
   Details: `reports/04_vol_sentiment_validation.md`.
+
+## 11. The nonlinear model: mood feeds into volatility
+
+Code: `src/cac40_mood/mood/sv.py`, `sv_run.py`. Tests: `tests/test_sv.py`. Pre-registration: DECISIONS #58.
+
+**Why another model.** In sections 1–10 the mood is read only through the scores, and every equation is linear
+with normal errors, so the Kalman filter already gives the exact answer; the particle filter adds nothing there
+except a check. Here the mood also drives something we observe in a nonlinear way: returns.
+
+**The model, per firm.** Two hidden numbers per day, the mood `m` and the log-variance `h`:
+
+    m_t = phi_m × m_{t-1} + shock                                  (as before)
+    h_t = mu + phi_h × (h_{t-1} − mu) + beta × m_{t-1} + shock     (new)
+
+and two kinds of data:
+
+    a scored document:  score = m_t + error                        (as before)
+    the day's return:   r_t ~ Normal(0, exp(h_t))                  (new)
+
+- `h` is the logarithm of the day's return variance. It is persistent (`phi_h` near 1) and wanders around the
+  firm's own level `mu`.
+- `beta` is the link. Negative `beta`: a bad mood yesterday pushes today's log-variance up.
+- A return of −3% is likely if `exp(h)` is large and very unlikely if it is small. That `exp()` is what breaks
+  the Kalman filter: the data are no longer a straight-line function of the hidden numbers plus normal noise.
+
+**The particle filter here.** Each particle is a pair (m, h). Every day:
+
+1. **Move** each pair one step with its own random shocks (h uses the particle's mood of the day before).
+2. **Weigh** it by the day's documents (is its mood close to the scores?) and by the day's return (is a return
+   of this size plausible with its variance?). A day with a 4% move kills the particles that believed in calm.
+3. **Resample** when the weights have become too uneven (effective sample size below half the particles).
+
+Because returns arrive every day, the cloud is weighed every day, not only on document days. The information
+flows both ways: documents inform the mood, and if `beta` is not zero, unusual volatility also says something
+about the mood.
+
+**Forecast.** For each particle the expected variance j days ahead has a closed form (the two equations are
+linear in m and h; only the return is not), so the forecast for the next 5 days is the weighted average over
+particles of that formula. No extra simulation is needed.
+
+**Worked example of one weighing step.** Three particles, all with weight 1/3, and a return of −3% (r² = 0.0009):
+
+| Particle | h (log-variance) | Daily volatility exp(h/2) | log weight change = −½ (h + r² / exp(h)) | New weight |
+|---|---|---|---|---|
+| A: calm | −9.2 | 1.0% | −½ (−9.2 + 0.0009 / 0.000101) = 0.15 | 0.03 |
+| B: normal | −8.1 | 1.7% | −½ (−8.1 + 0.0009 / 0.000304) = 2.57 | 0.38 |
+| C: nervous | −7.0 | 3.0% | −½ (−7.0 + 0.0009 / 0.000912) = 3.01 | 0.59 |
+
+After a −3% day the "calm" particle keeps 3% of the weight. Effective sample size = 1 / (0.03² + 0.38² + 0.59²)
+= 2.0 of 3.
+
+**How it is estimated** (train period only): the mood parameters by the exact Kalman likelihood on the scores,
+then `phi_h`, `sigma_h` and `beta` by the particle filter's likelihood, started from three values of `beta` and
+always with the same random numbers so that two parameter values can be compared. A twin model with `beta = 0`
+is fitted the same way: it is the fair comparison ("is it the mood, or would any volatility model of this kind
+help?").
+
+**What came out (train fit, validation test)**
+
+| | phi | sigma (daily shock) | beta |
+|---|---|---|---|
+| Mood (one per firm) | 0.954 (half-life 15 days) | 0.063 | |
+| Log-variance, with mood | 0.955 | 0.263 | **0.0004** |
+| Log-variance, beta fixed at 0 | 0.945 | 0.288 | 0 |
+
+- **The link is zero.** The fitted `beta` is 0.0004. Letting it differ from zero raises the train
+  log-likelihood by 4.7 under the estimation seed and *lowers* it under three other seeds (−0.7, −1.8, −14.6):
+  no evidence that mood enters the volatility equation.
+- **Filter health** (5,000 particles per firm, 50,688 firm-days): median effective sample size 3,503; 5th
+  percentile 2,037; below 100 on 100 firm-days (days with an extreme return); resampled on 14% of firm-days.
+- **Pre-registered test (h = 5, QLIKE):** M3 beats M by 0.0013 (0.16941 → 0.16810, p = 0.03).
+- **But not because of the nonlinear part.** The model's volatility forecast alone adds nothing to M
+  (p = 0.93). Its filtered mood alone gives the whole gain (p = 0.002), and with `beta` at zero that mood is a
+  plain linear filter of the scores: a per-firm mood with a 15-day half-life. Higher mood, lower volatility
+  over the next five days.
+- So on this data the particle filter was not needed for forecasting; what helps is a simpler mood than the
+  two-stage market/firm one of section 6. That simpler mood was not a pre-planned variant, which is why it is
+  reported as exploratory. Details: `reports/05_nonlinear_mood_validation.md`.
+

@@ -6,11 +6,11 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
 | 1 Data | 3–4 | ✅ 2026-11-11 |
-| 2 Scoring | 3 | ✅ 2026-11-12: bulk run, baselines, gold-set agreement reported (weak: tone rank correlation 0.43); open ❓ Loughran-McDonald (#57) |
-| 3 Event study | 2 | 🟡 results on train+validation 2026-11-12 (`reports/03_event_study.md`); waits for my review |
-| 4 Volatility | 3 | 🟡 B0/B1/M/M2 compared on validation 2026-11-12 (`reports/04_vol_sentiment_validation.md`); GARCH-X robustness and config freeze open |
-| 5 Particle filter | 4 | 🟡 fitted on train, filtered through validation, M2 compared 2026-11-12; Student-t on real data open |
-| 6 Final test evaluation | 1 | ⬜ |
+| 2 Scoring | 3 | ✅ 2026-11-12: bulk run, baselines (incl. Loughran-McDonald on English versions), gold-set agreement, memory check |
+| 3 Event study | 2 | ✅ train+validation results 2026-11-12 (`reports/03_event_study.md`) |
+| 4 Volatility | 3 | ✅ B0/B1/M/M2 on validation, GARCH-X robustness 2026-11-12; freeze proposed (DECISIONS #63) |
+| 5 Particle filter | 4 | ✅ linear mood (M2) and pre-registered nonlinear mood (M3) fitted on train and compared on validation 2026-11-12 |
+| 6 Final test evaluation | 1 | ⬜ plan and config proposed (`docs/PHASE6_PLAN.md`); not tagged, not run, waiting for my OK |
 | 7 Dashboard | 2 | ⬜ |
 | 8 Write-up | 2 | ⬜ |
 

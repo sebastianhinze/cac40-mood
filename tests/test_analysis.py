@@ -25,6 +25,8 @@ def make_documents(rows: list[tuple]) -> pd.DataFrame:
     frame["lex_tone"] = 0.6
     frame["lex_uncertainty"] = 1.0
     frame["lm_tone"] = frame["tone"] / 2
+    frame["lmd_tone"] = -0.2
+    frame["lmd_uncertainty"] = 1.5
     frame["split"] = "train"
     return frame
 
@@ -260,6 +262,7 @@ def simulated_events(seed: int = 9, count: int = 600) -> pd.DataFrame:
             "uncertainty": rng.uniform(0, 1, count),
             "lm_tone": tone + rng.normal(0, 1.0, count),
             "lex_tone": rng.uniform(-1, 1, count),
+            "lmd_tone": rng.uniform(-1, 1, count),
             "residual_sd": rng.uniform(0.01, 0.03, count),
             "log_revenue": rng.uniform(8.0, 12.0, count),
             "topic": rng.choice(["results", "financing", "other"], count, p=[0.6, 0.3, 0.1]),

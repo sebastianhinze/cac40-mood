@@ -30,12 +30,14 @@ from cac40_mood.scoring import gold
 from cac40_mood.scoring.agreement import cohens_kappa, direction
 
 REPORT_PATH: Path = PROJECT_ROOT / "reports" / "02_gold_agreement.md"
+LOUGHRAN_PATH: Path = PROCESSED_DIR / "baseline_loughran.parquet"
 
 # Scorer name -> column that holds its tone in the combined table.
 TONE_COLUMNS: dict[str, str] = {
     "LLM": "llm_tone",
     "Local model": "lm_tone",
     "Lexicon": "lex_tone",
+    "Loughran-McDonald": "lmd_tone",
 }
 
 
@@ -58,7 +60,11 @@ def check_labels_complete(sample: pd.DataFrame, labels: pd.DataFrame) -> None:
 
 
 def combine(
-    labels: pd.DataFrame, scores: pd.DataFrame, lexicon: pd.DataFrame, local_model: pd.DataFrame
+    labels: pd.DataFrame,
+    scores: pd.DataFrame,
+    lexicon: pd.DataFrame,
+    local_model: pd.DataFrame,
+    loughran: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """One row per labelled document: my label next to each scorer's tone and the LLM's topic."""
     human = labels[["doc_id", "tone", "topic"]].rename(
@@ -68,7 +74,12 @@ def combine(
     llm = valid_scores.rename(columns={"tone": "llm_tone", "topic": "llm_topic"})
     table = human.merge(llm, on="doc_id", how="left")
     table = table.merge(local_model[["doc_id", "lm_tone"]], on="doc_id", how="left")
-    return table.merge(lexicon[["doc_id", "lex_tone"]], on="doc_id", how="left")
+    table = table.merge(lexicon[["doc_id", "lex_tone"]], on="doc_id", how="left")
+    # Loughran-McDonald: only documents with an official English version have a score.
+    if loughran is None:
+        loughran = pd.DataFrame(columns=["doc_id", "lmd_tone"])
+    table = table.merge(loughran[["doc_id", "lmd_tone"]], on="doc_id", how="left")
+    return table.astype({"lmd_tone": float})
 
 
 def tone_agreement(human_tone: pd.Series, scorer_tone: pd.Series) -> dict[str, float]:
@@ -187,6 +198,7 @@ def main() -> None:
         pd.read_parquet(PROCESSED_DIR / "scores.parquet"),
         pd.read_parquet(PROCESSED_DIR / "baseline_lexicon.parquet"),
         pd.read_parquet(PROCESSED_DIR / "baseline_local_model.parquet"),
+        pd.read_parquet(LOUGHRAN_PATH) if LOUGHRAN_PATH.exists() else None,
     )
     REPORT_PATH.write_text(report_text(table, sample), encoding="utf-8")
     print(f"Report written to {REPORT_PATH}")

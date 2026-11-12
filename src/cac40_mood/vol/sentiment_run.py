@@ -43,6 +43,7 @@ MODELS: dict[str, list[str]] = {
     "M+extra": [*M_COLUMNS, *features.EXTRA_COLUMNS],
     "B1+lexicon": [*B1_COLUMNS, *features.LEXICON_COLUMNS],
     "B1+local": [*B1_COLUMNS, *features.LOCAL_MODEL_COLUMNS],
+    "B1+LM": [*B1_COLUMNS, *features.LOUGHRAN_COLUMNS],
 }
 PRIMARY_HORIZON: int = 5
 
@@ -156,7 +157,8 @@ def write_report(
         markdown(against_b1.drop(columns=["firm_days"]), 5),
         "",
         "B0 = HAR only. M = B1 + |tone| + uncertainty. M2 = M + filtered mood. `M+extra`,",
-        "`B1+lexicon` and `B1+local` are exploratory.",
+        "`B1+lexicon`, `B1+local` and `B1+LM` (Loughran-McDonald on official English versions)",
+        "are exploratory.",
         "",
         "## Mood against raw scores: M2 against M",
         "",

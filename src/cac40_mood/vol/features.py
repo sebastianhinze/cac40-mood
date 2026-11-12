@@ -37,12 +37,16 @@ SCORE_COLUMNS: list[str] = ["abs_tone", "uncertainty"]
 EXTRA_COLUMNS: list[str] = ["neg_tone", "abs_surprise"]
 LEXICON_COLUMNS: list[str] = ["lex_abs_tone", "lex_uncertainty"]
 LOCAL_MODEL_COLUMNS: list[str] = ["lm_abs_tone"]
+# Loughran-McDonald exists only for documents with an official English version (92%); a day
+# whose documents have none gets 0 here, like a day without news.
+LOUGHRAN_COLUMNS: list[str] = ["lmd_abs_tone", "lmd_uncertainty"]
 ALL_COLUMNS: list[str] = [
     *EVENT_COLUMNS,
     *SCORE_COLUMNS,
     *EXTRA_COLUMNS,
     *LEXICON_COLUMNS,
     *LOCAL_MODEL_COLUMNS,
+    *LOUGHRAN_COLUMNS,
 ]
 
 MIN_WEIGHT: float = 0.05  # a document with confidence 0 still counts a little
@@ -73,6 +77,8 @@ def daily_document_features(documents: pd.DataFrame) -> pd.DataFrame:
     day["lex_abs_tone"] = by_day["lex_tone"].mean().abs()
     day["lex_uncertainty"] = by_day["lex_uncertainty"].mean()
     day["lm_abs_tone"] = by_day["lm_tone"].mean().abs()
+    day["lmd_abs_tone"] = by_day["lmd_tone"].mean().abs()  # mean() skips missing scores
+    day["lmd_uncertainty"] = by_day["lmd_uncertainty"].mean()
     return day.reset_index().rename(columns={"event_session": "date"})
 
 

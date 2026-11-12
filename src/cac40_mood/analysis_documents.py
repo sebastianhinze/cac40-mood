@@ -46,6 +46,10 @@ SCORE_COLUMNS: list[str] = [
 ]
 
 
+LOUGHRAN_COLUMNS: list[str] = ["lmd_tone", "lmd_uncertainty"]
+LOUGHRAN_PATH = PROCESSED_DIR / "baseline_loughran.parquet"
+
+
 def flag_size_source_later(documents: pd.DataFrame, revenue: pd.DataFrame) -> pd.DataFrame:
     """Add `revenue` (the figure the LLM was given) and `size_source_later`.
 
@@ -66,12 +70,18 @@ def select_documents(
     lexicon: pd.DataFrame,
     local_model: pd.DataFrame,
     revenue: pd.DataFrame,
+    loughran: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return (documents used in the analysis, a small table of how many each rule removed)."""
     in_sample = filings.loc[filings["split"].isin(["train", "val"]), FILING_COLUMNS]
     table = in_sample.merge(scores[SCORE_COLUMNS], on="doc_id", how="left")
     table = table.merge(lexicon[["doc_id", "lex_tone", "lex_uncertainty"]], on="doc_id", how="left")
     table = table.merge(local_model[["doc_id", "lm_tone"]], on="doc_id", how="left")
+    # Loughran-McDonald scores exist only for documents with an official English version.
+    if loughran is None:
+        loughran = pd.DataFrame(columns=["doc_id", *LOUGHRAN_COLUMNS])
+    table = table.merge(loughran[["doc_id", *LOUGHRAN_COLUMNS]], on="doc_id", how="left")
+    table[LOUGHRAN_COLUMNS] = table[LOUGHRAN_COLUMNS].astype(float)
     table = flag_size_source_later(table, revenue)
 
     rules = [
@@ -100,4 +110,5 @@ def load_documents() -> tuple[pd.DataFrame, pd.DataFrame]:
         pd.read_parquet(PROCESSED_DIR / "baseline_lexicon.parquet"),
         pd.read_parquet(PROCESSED_DIR / "baseline_local_model.parquet"),
         pd.read_parquet(TABLE_PATH),
+        pd.read_parquet(LOUGHRAN_PATH) if LOUGHRAN_PATH.exists() else None,
     )

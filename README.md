@@ -52,7 +52,14 @@ uv run python -m cac40_mood.scoring.gold_report
 uv run python -m cac40_mood.mood.real            # fit the mood model on train, filter through validation
 uv run python -m cac40_mood.vol.sentiment_run    # HAR with announcement, score and mood columns
 uv run python -m cac40_mood.events.run           # event study with the scores
-uv run python -m cac40_mood.scoring.sanity       # breakdown of the documents that were not scored
+uv run python -m cac40_mood.scoring.sanity       # breakdown of the documents that were not scoreduv run python -m cac40_mood.scoring.masking full     # memory check: re-score 100 documents with names hidden
+uv run python -m cac40_mood.scoring.memory_report    # ... and compare; release-timestamp check
+uv run python -m cac40_mood.mood.sv_run              # nonlinear mood model: fit on train, filter (about 15 min)
+uv run python -m cac40_mood.vol.nonlinear_run        # its pre-registered validation test
+uv run python -m cac40_mood.vol.garchx               # GARCH-X robustness on ten firms
+uv run python -m cac40_mood.data.build fetch-pdfs-en # official English versions (about 40 min, polite rate)
+uv run python -m cac40_mood.data.build texts-en
+uv run python -m cac40_mood.scoring.loughran         # Loughran-McDonald baseline
 ```
 Reports: `reports/04_vol_sentiment_validation.md`, `reports/03_event_study.md`, `reports/02_unscored_documents.md`.
 

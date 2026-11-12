@@ -38,7 +38,12 @@ OUTCOMES: dict[str, str] = {
 }
 SCORES: list[str] = ["tone", "surprise", "uncertainty"]
 CONTROLS: list[str] = ["intraday_flag", "residual_sd", "log_revenue"]
-SCORERS: dict[str, str] = {"LLM": "tone", "Local model": "lm_tone", "Lexicon": "lex_tone"}
+SCORERS: dict[str, str] = {
+    "LLM": "tone",
+    "Local model": "lm_tone",
+    "Lexicon": "lex_tone",
+    "Loughran-McDonald": "lmd_tone",
+}
 
 
 def main_topic(documents: pd.DataFrame) -> pd.DataFrame:
@@ -51,7 +56,7 @@ def main_topic(documents: pd.DataFrame) -> pd.DataFrame:
 def build_events(documents: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
     """One row per firm-day event with scores, controls and abnormal returns."""
     documents = documents.assign(log_revenue=np.log(documents["revenue"]))
-    columns = [*SCORES, "lm_tone", "lex_tone", "log_revenue"]
+    columns = [*SCORES, "lm_tone", "lex_tone", "lmd_tone", "log_revenue"]
     events = study.prepare_events(documents, columns)
     events = events.merge(main_topic(documents), on=["firm_id", "event_session"], how="left")
     panel = market_model.build_return_panel(prices, "FCHI", pd.Timestamp(VAL_END))
@@ -227,7 +232,8 @@ def write_report(events: pd.DataFrame, tables: dict[str, pd.DataFrame]) -> None:
         "",
         "## Which scorer's tone goes with the day-0 return? (RQ5)",
         "",
-        "Slope = change in CAR[0] for a tone one standard deviation higher.",
+        "Slope = change in CAR[0] for a tone one standard deviation higher. Only events that",
+        "every scorer has a tone for (Loughran-McDonald needs an official English version).",
         "",
         markdown(tables["scorers"], 5),
         "",

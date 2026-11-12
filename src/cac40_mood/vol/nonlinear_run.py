@@ -42,6 +42,9 @@ def models_for(horizon: int) -> dict[str, list[str]]:
         "M2": MODELS["M2"],
         "M+SV0": [*MODELS["M"], f"sv0_log_forecast_{horizon}"],
         "M3": [*MODELS["M"], f"sv_log_forecast_{horizon}", "sv_mood"],
+        # The two halves of M3, added after the result was seen, to find out which half helps.
+        "M+SVforecast": [*MODELS["M"], f"sv_log_forecast_{horizon}"],
+        "M+SVmood": [*MODELS["M"], "sv_mood"],
     }
 
 
@@ -52,31 +55,55 @@ def add_nonlinear_columns(frame: pd.DataFrame, nonlinear: pd.DataFrame) -> pd.Da
     return merged.dropna(subset=columns).reset_index(drop=True)
 
 
-def comparisons(frame: pd.DataFrame) -> pd.DataFrame:
-    """M3 against each baseline at each horizon: one row per (horizon, baseline)."""
+def all_forecasts(frame: pd.DataFrame) -> dict[int, dict[str, pd.DataFrame]]:
+    """Validation forecasts of every model, per horizon."""
     first_origin = pd.Timestamp(TRAIN_END) + pd.Timedelta(days=1)
-    rows = []
-    for horizon in HORIZONS:
-        forecasts = {
+    return {
+        horizon: {
             name: har.expanding_forecasts(
                 frame, columns, horizon, first_origin, pd.Timestamp(VAL_END)
             )
             for name, columns in models_for(horizon).items()
         }
-        for baseline in BASELINES:
-            pair = {baseline: forecasts[baseline], "M3": forecasts["M3"]}
-            table = evaluate.compare_models(pair, baseline, horizon).set_index("model")
-            rows.append(
-                {
-                    "horizon": horizon,
-                    "M3 against": baseline,
-                    "qlike_baseline": table.loc[baseline, "qlike"],
-                    "qlike_M3": table.loc["M3", "qlike"],
-                    "qlike_minus_baseline": table.loc["M3", "qlike_minus_baseline"],
-                    "dm_statistic": table.loc["M3", "dm_statistic"],
-                    "dm_p_value": table.loc["M3", "dm_p_value"],
-                }
-            )
+        for horizon in HORIZONS
+    }
+
+
+def pair_row(
+    forecasts: dict[str, pd.DataFrame], model: str, baseline: str, horizon: int
+) -> dict[str, object]:
+    """One comparison: `model` against `baseline` (negative difference = model is better)."""
+    pair = {baseline: forecasts[baseline], model: forecasts[model]}
+    table = evaluate.compare_models(pair, baseline, horizon).set_index("model")
+    return {
+        "horizon": horizon,
+        "model": model,
+        "against": baseline,
+        "qlike_baseline": table.loc[baseline, "qlike"],
+        "qlike_model": table.loc[model, "qlike"],
+        "qlike_minus_baseline": table.loc[model, "qlike_minus_baseline"],
+        "dm_statistic": table.loc[model, "dm_statistic"],
+        "dm_p_value": table.loc[model, "dm_p_value"],
+    }
+
+
+def comparisons(forecasts: dict[int, dict[str, pd.DataFrame]]) -> pd.DataFrame:
+    """M3 against each baseline at each horizon."""
+    rows = [
+        pair_row(models, "M3", baseline, horizon)
+        for horizon, models in forecasts.items()
+        for baseline in BASELINES
+    ]
+    return with_interval(pd.DataFrame(rows))
+
+
+def decomposition(forecasts: dict[int, dict[str, pd.DataFrame]]) -> pd.DataFrame:
+    """Which part of M3 helps? Each part alone against M, at h = 5 (post hoc, exploratory)."""
+    models = forecasts[PRIMARY_HORIZON]
+    rows = [
+        pair_row(models, name, "M", PRIMARY_HORIZON)
+        for name in ("M+SV0", "M+SVforecast", "M+SVmood", "M3", "M2")
+    ]
     return with_interval(pd.DataFrame(rows))
 
 
@@ -87,8 +114,10 @@ def train_slopes(frame: pd.DataFrame) -> pd.DataFrame:
     return model.slopes.rename("slope").to_frame().reset_index(names="column")
 
 
-def write_report(table: pd.DataFrame, slopes: pd.DataFrame, fitted: dict) -> None:
-    primary = table[(table["horizon"] == PRIMARY_HORIZON) & (table["M3 against"] == "M")]
+def write_report(
+    table: pd.DataFrame, parts: pd.DataFrame, slopes: pd.DataFrame, fitted: dict
+) -> None:
+    primary = table[(table["horizon"] == PRIMARY_HORIZON) & (table["against"] == "M")]
     with_mood, without_mood, health = fitted["with_mood"], fitted["without_mood"], fitted["filter"]
     gains = ", ".join(f"{gain:.1f}" for gain in fitted["same_gain_under_three_other_seeds"])
     lines = [
@@ -111,6 +140,14 @@ def write_report(table: pd.DataFrame, slopes: pd.DataFrame, fitted: dict) -> Non
         "",
         markdown(table, 5),
         "",
+        "## Which part of M3 helps? (h = 5, each against M; added after seeing the result)",
+        "",
+        "`M+SVforecast` = M plus only the nonlinear model's variance forecast. `M+SVmood` = M plus",
+        "only its filtered mood. With beta at zero (below), that mood is in effect a linear",
+        "per-firm mood filter: returns tell it nothing.",
+        "",
+        markdown(parts, 5),
+        "",
         "## Fitted parameters (train period)",
         "",
         "| | phi_h | sigma_h | beta |",
@@ -132,6 +169,9 @@ def write_report(table: pd.DataFrame, slopes: pd.DataFrame, fitted: dict) -> Non
         f"- {health['particles']:,} particles per firm.",
         f"- Effective sample size: median {health['ess_median']:,.0f}, 5th percentile "
         f"{health['ess_5th_percentile']:,.0f}, minimum {health['ess_minimum']:,.0f}.",
+        f"- Firm-days with an effective sample size below 100: {health['firm_days_ess_below_100']}"
+        f" of {health['firm_days']:,} (days with an extreme return; the cloud is resampled"
+        " right after).",
         f"- Resampled on {health['share_of_firm_days_resampled']:.1%} of firm-days.",
         "",
         "## Slopes of M3 at h = 5, train period (description only)",
@@ -146,9 +186,15 @@ def main() -> None:
     documents, _ = load_documents()
     frame = build_frame(load_panel(), documents, pd.read_parquet(MOOD_PATH))
     frame = add_nonlinear_columns(frame, pd.read_parquet(SV_PATH))
-    table = comparisons(frame)
-    write_report(table, train_slopes(frame), json.loads(SV_PARAMETERS_PATH.read_text()))
+    forecasts = all_forecasts(frame)
+    table, parts = comparisons(forecasts), decomposition(forecasts)
+    fitted = json.loads(SV_PARAMETERS_PATH.read_text())
+    ess = pd.read_parquet(SV_PATH, columns=["sv_ess"])["sv_ess"]
+    fitted["filter"]["firm_days_ess_below_100"] = int((ess < 100).sum())
+    fitted["filter"]["firm_days"] = len(ess)
+    write_report(table, parts, train_slopes(frame), fitted)
     print(table.round(5).to_string(index=False))
+    print(parts.round(5).to_string(index=False))
 
 
 if __name__ == "__main__":
