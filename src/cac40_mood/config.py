@@ -32,12 +32,17 @@ PARIS_TZ: str = "Europe/Paris"
 
 @dataclass(frozen=True)
 class Settings:
-    """The subset of `.env` that the data phase needs."""
+    """Everything read from `.env` except the API key (the Anthropic client reads that itself)."""
 
     sample_start: date
     sample_end: date
     http_user_agent: str
     http_min_seconds_between_requests: float
+    llm_model: str
+    llm_reference_model: str
+    llm_spend_cap_usd: float
+    llm_pilot_size: int
+    llm_max_doc_tokens: int
 
 
 def load_settings(env_file: Path | None = None) -> Settings:
@@ -54,4 +59,9 @@ def load_settings(env_file: Path | None = None) -> Settings:
         http_min_seconds_between_requests=float(
             os.getenv("HTTP_MIN_SECONDS_BETWEEN_REQUESTS", "0.5")
         ),
+        llm_model=os.getenv("LLM_MODEL", "claude-haiku-5-5"),
+        llm_reference_model=os.getenv("LLM_REFERENCE_MODEL", "claude-sonnet-5-5"),
+        llm_spend_cap_usd=float(os.getenv("LLM_SPEND_CAP_USD", "30")),
+        llm_pilot_size=int(os.getenv("LLM_PILOT_SIZE", "20")),
+        llm_max_doc_tokens=int(os.getenv("LLM_MAX_DOC_TOKENS", "12000")),
     )

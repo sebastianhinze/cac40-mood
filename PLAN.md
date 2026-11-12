@@ -6,11 +6,11 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
 | 1 Data | 3–4 | ✅ 2026-11-11 |
-| 2 Scoring | 3 | ⬜ |
-| 3 Event study | 2 | ⬜ |
-| 4 Volatility | 3 | ⬜ |
-| 5 Particle filter | 4 | ⬜ |
-| 6 Final test evaluation | 1 | ⬜ |
+| 2 Scoring | 3 | ✅ 2026-11-12: bulk run, baselines (incl. Loughran-McDonald on English versions), gold-set agreement, memory check |
+| 3 Event study | 2 | ✅ train+validation results 2026-11-12 (`reports/03_event_study.md`) |
+| 4 Volatility | 3 | ✅ B0/B1/M/M2 on validation, GARCH-X robustness 2026-11-12; freeze proposed (DECISIONS #63) |
+| 5 Particle filter | 4 | ✅ linear mood (M2) and pre-registered nonlinear mood (M3) fitted on train and compared on validation 2026-11-12 |
+| 6 Final test evaluation | 1 | ✅ 2026-11-12: run once on tag `phase6-freeze` (f939524); RQ3 and RQ4 not confirmed (`reports/06_test_results.md`, `docs/FINDINGS.md`) |
 | 7 Dashboard | 2 | ⬜ |
 | 8 Write-up | 2 | ⬜ |
 

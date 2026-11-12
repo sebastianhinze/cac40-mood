@@ -135,3 +135,79 @@ Some members (e.g. Bureau Veritas, Eiffage, Euronext) joined the index during th
 | PyMuPDF | AGPL | 98–100% | 0.0–0.1% | 3.5 s |
 | pypdf | BSD | 97–99% | 0.6–1.8% | 15.8 s |
 | pdfplumber | MIT | 97–98% | 0.5–3.6% | 31.1 s |
+
+## 7. LLM scoring: measured in the phase 2 pilot (2026-11-11)
+- **Tokens:** French filing text has a median of **2.37 characters per token** on `claude-haiku-5-5` (20 documents, range
+  2.0–2.75; the one English document 2.75). The earlier guess of about 3 was too optimistic.
+- **Fixed overhead per request:** about 1,120 input tokens (instructions about 600, JSON schema about 520).
+- **Output:** about 125 tokens per document with thinking off or at low effort, on Haiku and on Sonnet alike.
+- **Prices (Anthropic pricing page):** Haiku 5.5 $0.10 / $0.50 per million input / output tokens for prompts up to 100k
+  tokens; Sonnet 5.5 $2 / $10. The Batches API costs half. The token-counting endpoint is free.
+- **Full run, 7,223 documents, measured token counts:** cap 4,000 tokens $3.06 standard / $1.53 batch; cap 8,000
+  $3.81 / $1.91; cap 12,000 $4.36 / $2.18.
+- **Pilot spend:** $0.57 in total (Haiku $0.13 for 209 calls, Sonnet $0.44 for 50 calls).
+- Haiku 5.5 rejects a temperature setting, so identical requests can return slightly different scores; the pilot
+  measures that noise by scoring twice.
+- Do not run two scoring jobs at once: both can miss the cache for the same document and pay for it twice (this
+  happened once in the pilot, cost $0.0004).
+- **Prompt v2 at the 12,000-token cap (same day):** fixed overhead about 2,170 input tokens per request (longer
+  instructions), about 122 output tokens. Full run of 7,223 documents: **$5.08 standard / $2.54 batch**.
+  Pilot spend to date: $1.39 (v1 and v2 pilots, two Sonnet comparisons).
+
+## 8. Firm size: revenue per fiscal year (2026-11-12)
+
+**What it is for:** the scoring prompt tells the model the issuer's approximate annual revenue so it can judge
+materiality. The figures are *not* typed in by hand.
+
+**Source:** each firm's own annual-results announcements in our filings table (train and validation periods only).
+- Candidates: every document published January–April, plus every filing coded as a results release (001007, 001008)
+  in any month: 2,386 documents.
+- Extraction: `scoring/revenue.py` asks `claude-haiku-5-5` (prompt `revenue-v2`, first 15,000 characters) whether the
+  document announces the listed company's full-year results and, if so, for the revenue of that year and of the year
+  before, the currency, and a verbatim quote. 362 documents were classified as full-year announcements.
+- Table: `data/processed/firm_revenue.parquet`, one row per firm and fiscal year with revenue, currency, basis
+  ("reported" from that year's own release, or "comparative" = the previous-year figure in the next release), the
+  source `doc_id`, its publication time and the quote. Facts per document: `firm_revenue_facts.parquet`.
+
+**No look-ahead:** revenue of the fiscal year ending in year F is used for documents dated 1 July F+1 to 30 June F+2.
+If the table has no figure for that year, the latest earlier year is used.
+
+**Coverage and known weaknesses**
+- 246 of 259 firm-years for fiscal years 2017–2023 (211 reported, 35 comparative).
+- First pass (`revenue-v1`) picked up a subsidiary's revenue for Eiffage (APRR files under Eiffage's ISIN) and mixed
+  Crédit Agricole S.A. with the wider Crédit Agricole group. `revenue-v2` names the listed company and excludes
+  subsidiary announcements; both series are consistent now.
+- TotalEnergies: only fiscal years 2017 and 2018 were extracted (USD 149bn and 184bn, "revenues from sales"); later
+  results releases show revenue beyond the text that is read. All later TotalEnergies documents therefore use the
+  2018 figure. Right order of magnitude, but stale.
+- URW: the extracted figures are inconsistent (0.9–2.5bn). URW is outside the main analysis.
+- 119 documents (1.7%) from the first months of the sample have no earlier figure for their firm (Sanofi, Pernod
+  Ricard, Air Liquide, Dassault Systèmes, Bouygues, L'Oréal) and use the earliest later year instead; they are
+  flagged `size_backfilled`. For 28 of them that year had not been published yet at the document's date. The figure
+  only enters the prompt as a rounded size ("about EUR 9.2 billion").
+- Two firm-years are flagged `needs_check` because two releases disagree by more than 15% (Engie 2020 after a
+  restatement, URW 2018).
+- Cost: $0.48 (first pass) + $0.62 (second pass), Batches API.
+
+## 9. Loughran-McDonald dictionary (baseline, added 2026-11-12)
+
+- **What:** Loughran-McDonald Master Dictionary with sentiment word lists (negative 2,355 words, positive 354,
+  uncertainty 297). English only.
+- **Source:** https://sraf.nd.edu/loughranmcdonald-master-dictionary/ (University of Notre Dame, Software
+  Repository for Accounting and Finance). CSV version covering 1993–2025, page updated March 2026, downloaded
+  2026-11-12 from the Google Drive link on that page.
+- **Licence, as stated on the page:** "The dictionary/sentiment lists are free for use in academic research."
+  Commercial licences: contact the authors. This project is non-commercial research; the file stays in
+  `data/raw/lexicon/` (git-ignored) and is not redistributed. **If the project were ever used commercially,
+  this baseline would need a licence or would have to be removed.**
+- **Reference:** Loughran and McDonald (2011), "When is a liability not a liability?", Journal of Finance.
+
+## 10. Official English versions of French filings (added 2026-11-12)
+
+- The feed often carries an announcement twice, French and English. Phase 1 kept the French one and set the
+  English twin aside (`is_translation`, `twin_doc_id` in `filings_all.parquet`).
+- For the Loughran-McDonald baseline the English twins of train/validation documents are downloaded from the
+  same DILA server with the same polite settings (`build fetch-pdfs-en`, `build texts-en` →
+  `data/processed/texts_en.parquet`). 4,565 French documents to score have a twin.
+- The twins are the firms' own English versions, not machine translations.
+
