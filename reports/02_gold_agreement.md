@@ -8,9 +8,9 @@
 
 | scorer | n | spearman | same_direction | opposite_sign |
 |---|---|---|---|---|
-| LLM | 40.0 | 0.434 | 0.475 | 0.05 |
-| Local model | 40.0 | 0.495 | 0.625 | 0.05 |
-| Lexicon | 40.0 | 0.294 | 0.7 | 0.075 |
+| LLM | 40 | 0.434 | 0.475 | 0.05 |
+| Local model | 40 | 0.495 | 0.625 | 0.05 |
+| Lexicon | 40 | 0.294 | 0.7 | 0.075 |
 
 ## My direction (rows) against the LLM's (columns)
 

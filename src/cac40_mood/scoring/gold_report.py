@@ -134,7 +134,8 @@ def markdown_table(frame: pd.DataFrame, index_label: str = "") -> str:
     """Render a small table as Markdown (written out by hand to avoid an extra dependency)."""
     header = [index_label, *[str(column) for column in frame.columns]]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    for label, row in frame.iterrows():
+    # itertuples keeps each column's own type; iterrows would turn the count 40 into 40.0.
+    for label, row in zip(frame.index, frame.itertuples(index=False), strict=True):
         cells = [str(label), *[str(value) for value in row]]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
