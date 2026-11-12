@@ -115,7 +115,7 @@ The repository is ready for it: entry point `app/main.py`, dependencies in `app/
 1. Sign in at https://share.streamlit.io with the GitHub account that owns the repository and allow
    Streamlit to read it.
 2. **Create app** → **Deploy a public app from GitHub**.
-3. Repository `<owner>/cac40-mood`, branch `main`, main file path `app/main.py`.
+3. Repository `sebastianhinze/cac40-mood`, branch `main`, main file path `app/main.py`.
 4. Optional: choose an app URL (for example `cac40-mood`).
 5. **Advanced settings** → Python version **3.12**. No secrets.
 6. **Deploy**. The first build takes a few minutes; later pushes to `main` redeploy automatically.

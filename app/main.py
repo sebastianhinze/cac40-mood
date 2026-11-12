@@ -39,7 +39,7 @@ FEED_GAP = ("2020-03-05", "2020-06-15")
 TEST_START = (pd.Timestamp(VAL_END) + pd.Timedelta(days=1)).date()
 TOPICS_ALL = "all topics"
 COMPANIES_ALL = "all companies"
-REPOSITORY_URL = "https://github.com/86kdvt9c4f-collab/cac40-mood"
+REPOSITORY_URL = "https://github.com/sebastianhinze/cac40-mood"
 
 st.set_page_config(page_title="CAC 40 Mood", layout="wide", initial_sidebar_state="collapsed")
 
