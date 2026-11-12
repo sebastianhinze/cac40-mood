@@ -7,6 +7,9 @@ help forecast volatility: the small gain seen on validation was gone on the froz
 below is from the reports in [`reports/`](reports/); summary in
 [`docs/FINDINGS.md`](docs/FINDINGS.md).*
 
+**Live demo: [cac40-mood.streamlit.app](https://cac40-mood.streamlit.app/)**: company mood,
+announcement viewer, event study and validation vs test, running on saved results.
+
 ## The question
 
 Does the tone of official announcements (results, M&A, guidance, legal news…) predict
@@ -118,6 +121,7 @@ most:
 
 ## Dashboard
 
+Live at **[cac40-mood.streamlit.app](https://cac40-mood.streamlit.app/)**, or locally with
 `uv run streamlit run app/main.py`: per-company mood with its 95% band and announcements, an
 announcement viewer (scores, the model's one-line rationale and a link to the official PDF), the
 event study and the validation-vs-test panel. It reads saved results only and makes no API calls.
