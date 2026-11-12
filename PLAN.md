@@ -6,7 +6,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
 | 1 Data | 3–4 | ✅ 2026-11-11 |
-| 2 Scoring | 3 | 🟡 prompt v2 piloted 2026-11-11, gold-set page ready; waiting for my OK for the bulk run and for my labels |
+| 2 Scoring | 3 | 🟡 bulk run done 2026-11-12 (6,996 documents, $4.96 spent in total), baselines scored; open: my gold labels and the agreement report |
 | 3 Event study | 2 | 🟡 code and synthetic-data tests done 2026-11-11; results wait for scores |
 | 4 Volatility | 3 | 🟡 baselines B0 (HAR) and GARCH done on validation 2026-11-11; B1/M wait for scores |
 | 5 Particle filter | 4 | 🟡 implemented and validated on simulated data 2026-11-11 (docs/mood_model.md); real scores next |
