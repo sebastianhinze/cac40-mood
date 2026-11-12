@@ -60,13 +60,15 @@ topic dummies.
 
 ## Which scorer's tone goes with the day-0 return? (RQ5)
 
-Slope = change in CAR[0] for a tone one standard deviation higher.
+Slope = change in CAR[0] for a tone one standard deviation higher. Only events that
+every scorer has a tone for (Loughran-McDonald needs an official English version).
 
 | scorer | coefficient | ci_low | ci_high | t | p_value | r_squared | n |
 |---|---|---|---|---|---|---|---|
-| LLM | 0.00293 | 0.00206 | 0.0038 | 6.59445 | 0.0 | 0.02181 | 4369 |
-| Local model | 0.00178 | 0.00106 | 0.00249 | 4.87198 | 0.0 | 0.00806 | 4369 |
-| Lexicon | 0.00041 | -5e-05 | 0.00087 | 1.73646 | 0.08248 | 0.00043 | 4369 |
+| LLM | 0.00316 | 0.00225 | 0.00407 | 6.79334 | 0.0 | 0.02459 | 4111 |
+| Local model | 0.00182 | 0.00107 | 0.00257 | 4.76016 | 0.0 | 0.00814 | 4111 |
+| Lexicon | 0.00026 | -0.00022 | 0.00075 | 1.06835 | 0.28536 | 0.00017 | 4111 |
+| Loughran-McDonald | 0.00038 | -0.00013 | 0.00089 | 1.46944 | 0.14171 | 0.00036 | 4111 |
 
 ## Gold documents: my labels against the LLM (indicative only)
 

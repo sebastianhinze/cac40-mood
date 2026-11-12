@@ -11,6 +11,7 @@
 | LLM | 40 | 0.434 | 0.475 | 0.05 |
 | Local model | 40 | 0.495 | 0.625 | 0.05 |
 | Lexicon | 40 | 0.294 | 0.7 | 0.075 |
+| Loughran-McDonald | 36 | 0.113 | 0.444 | 0.139 |
 
 ## My direction (rows) against the LLM's (columns)
 
