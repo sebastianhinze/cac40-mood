@@ -188,3 +188,26 @@ If the table has no figure for that year, the latest earlier year is used.
 - Two firm-years are flagged `needs_check` because two releases disagree by more than 15% (Engie 2020 after a
   restatement, URW 2018).
 - Cost: $0.48 (first pass) + $0.62 (second pass), Batches API.
+
+## 9. Loughran-McDonald dictionary (baseline, added 2026-11-12)
+
+- **What:** Loughran-McDonald Master Dictionary with sentiment word lists (negative 2,355 words, positive 354,
+  uncertainty 297). English only.
+- **Source:** https://sraf.nd.edu/loughranmcdonald-master-dictionary/ (University of Notre Dame, Software
+  Repository for Accounting and Finance). CSV version covering 1993–2025, page updated March 2026, downloaded
+  2026-11-12 from the Google Drive link on that page.
+- **Licence, as stated on the page:** "The dictionary/sentiment lists are free for use in academic research."
+  Commercial licences: contact the authors. This project is non-commercial research; the file stays in
+  `data/raw/lexicon/` (git-ignored) and is not redistributed. **If the project were ever used commercially,
+  this baseline would need a licence or would have to be removed.**
+- **Reference:** Loughran and McDonald (2011), "When is a liability not a liability?", Journal of Finance.
+
+## 10. Official English versions of French filings (added 2026-11-12)
+
+- The feed often carries an announcement twice, French and English. Phase 1 kept the French one and set the
+  English twin aside (`is_translation`, `twin_doc_id` in `filings_all.parquet`).
+- For the Loughran-McDonald baseline the English twins of train/validation documents are downloaded from the
+  same DILA server with the same polite settings (`build fetch-pdfs-en`, `build texts-en` →
+  `data/processed/texts_en.parquet`). 4,565 French documents to score have a twin.
+- The twins are the firms' own English versions, not machine translations.
+

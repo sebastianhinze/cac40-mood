@@ -43,6 +43,7 @@ FILINGS_ALL_PATH = PROCESSED_DIR / "filings_all.parquet"
 FILINGS_PATH = PROCESSED_DIR / "filings.parquet"
 PRICES_PATH = PROCESSED_DIR / "prices.parquet"
 TEXTS_PATH = PROCESSED_DIR / "texts.parquet"
+TEXTS_EN_PATH = PROCESSED_DIR / "texts_en.parquet"
 SESSIONS_PATH = PROCESSED_DIR / "sessions.parquet"
 
 
@@ -152,6 +153,42 @@ def fetch_pdfs() -> None:
     print(f"pdfs: {outcomes}")
 
 
+def english_versions() -> pd.DataFrame:
+    """Official English versions of the French documents to score (train and validation).
+
+    The feed often carries the same announcement twice, in French and in English. The French
+    one is the document we score; its English twin was set aside in phase 1. Returns one row
+    per French document that has a twin: doc_id (French), en_doc_id, pdf_path (English file).
+    """
+    everything = pd.read_parquet(FILINGS_ALL_PATH)
+    twins = everything.loc[
+        everything["is_translation"] & (everything["lang"] == "en"),
+        ["doc_id", "twin_doc_id", "pdf_path"],
+    ].rename(columns={"doc_id": "en_doc_id", "twin_doc_id": "doc_id"})
+    documents = _documents_to_score()
+    wanted = documents.loc[documents["split"].isin(["train", "val"]), ["doc_id"]]
+    return wanted.merge(twins, on="doc_id").drop_duplicates("doc_id").reset_index(drop=True)
+
+
+def fetch_english_pdfs() -> None:
+    """Download the English twins that are not on disk yet."""
+    session = _session()
+    outcomes = {"cached": 0, "downloaded": 0, "missing": 0}
+    for pdf_path in english_versions()["pdf_path"]:
+        outcomes[download_to_file(session, PDF_BASE_URL + pdf_path, PDF_DIR / pdf_path)] += 1
+    print(f"english pdfs: {outcomes}")
+
+
+def build_english_texts() -> pd.DataFrame:
+    """Extract the English twins -> texts_en.parquet (keyed by the French document's doc_id)."""
+    versions = english_versions()
+    records = [pdf_text.extract_document(PDF_DIR / path) for path in versions["pdf_path"]]
+    texts = pd.concat([versions[["doc_id", "en_doc_id"]], pd.DataFrame(records)], axis=1)
+    texts.to_parquet(TEXTS_EN_PATH, index=False)
+    print(f"english texts: {texts['text_quality'].value_counts().to_dict()}")
+    return texts
+
+
 def build_texts() -> pd.DataFrame:
     """Extract the first pages of every document to be scored -> texts.parquet."""
     documents = _documents_to_score()
@@ -175,6 +212,8 @@ def main() -> None:
         "filings": build_filings,
         "fetch-pdfs": fetch_pdfs,
         "texts": build_texts,
+        "fetch-pdfs-en": fetch_english_pdfs,
+        "texts-en": build_english_texts,
     }
     for name in simple_steps:
         steps.add_parser(name)
