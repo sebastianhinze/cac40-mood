@@ -125,15 +125,17 @@ def score_all(
 
 def main() -> None:
     filings = pd.read_parquet(FILINGS_PATH)
-    in_sample = filings[~filings["is_admin"] & filings["split"].isin(["train", "val"])]
+    # All periods are scored, like the other scorers; the summary line uses train and
+    # validation only, so no test-period number is printed.
+    in_sample = filings[~filings["is_admin"] & filings["split"].isin(["train", "val", "test"])]
     english = english_texts(in_sample, pd.read_parquet(TEXTS_PATH), pd.read_parquet(TEXTS_EN_PATH))
     cap_chars = chars_for_token_cap(load_settings().llm_max_doc_tokens)
     scores = score_all(english, load_word_lists(), cap_chars)
     scores.to_parquet(SCORES_PATH, index=False)
+    tuning = scores[scores["doc_id"].isin(filings.loc[filings["split"] != "test", "doc_id"])]
     print(
-        f"Loughran-McDonald: {len(scores)} documents scored "
-        f"({scores['english_source'].value_counts().to_dict()}); "
-        f"mean tone {scores['lmd_tone'].mean():.3f}"
+        f"Loughran-McDonald: {len(scores)} documents scored; train and validation: "
+        f"{len(tuning)} documents, mean tone {tuning['lmd_tone'].mean():.3f}"
     )
 
 

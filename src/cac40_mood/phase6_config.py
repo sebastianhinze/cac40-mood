@@ -1,11 +1,10 @@
 """Frozen configuration for the one-off test-period evaluation (phase 6).
 
-Nothing in this file may change after the git tag `phase6-freeze` is set. The runner that
-uses it does not exist yet on purpose: it is written, and tested on made-up data, only after
-the freeze is approved, and it may not change any model logic, only pass these values on.
-What will run, step by step: docs/PHASE6_PLAN.md.
+Approved in DECISIONS #64. Nothing in this file may change after the git tag `phase6-freeze`
+is set. The runner is `phase6.py`; what it does, step by step: docs/PHASE6_PLAN.md.
 
-PROPOSED, NOT YET APPROVED (DECISIONS #63). The mood model for RQ4 is the one open choice.
+The numbers below were estimated on the train period (2019-2022) and are copied from
+`data/processed/mood/nonlinear_parameters.json`.
 """
 
 from __future__ import annotations

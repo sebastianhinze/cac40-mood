@@ -14,6 +14,7 @@ window reaches into the test period.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -29,10 +30,10 @@ FORECASTS_PATH: Path = PROCESSED_DIR / "vol" / "baseline_forecasts_validation.pa
 REPORT_PATH: Path = PROJECT_ROOT / "reports" / "04_vol_baseline_validation.md"
 
 
-def load_panel() -> pd.DataFrame:
-    """Daily variance and returns for the 36 firms, up to the end of validation."""
+def load_panel(last_day: date = VAL_END) -> pd.DataFrame:
+    """Daily variance and returns for the 36 firms up to `last_day` (default: validation end)."""
     prices = pd.read_parquet(PRICES_PATH)
-    return variance_panel(prices, main_analysis_firms(load_universe()))
+    return variance_panel(prices, main_analysis_firms(load_universe()), last_day)
 
 
 def baseline_forecasts(panel: pd.DataFrame) -> dict[int, dict[str, pd.DataFrame]]:

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -42,9 +43,9 @@ SEED: int = 5
 FIT_ROUNDS: int = 2
 
 
-def sample_sessions(sessions: pd.DataFrame) -> pd.DataFrame:
-    """Trading sessions from the start of train to the end of validation, in order."""
-    inside = sessions["date"].between(pd.Timestamp(TRAIN_START), pd.Timestamp(VAL_END))
+def sample_sessions(sessions: pd.DataFrame, last_day: date = VAL_END) -> pd.DataFrame:
+    """Trading sessions from the start of train to `last_day` (default: end of validation)."""
+    inside = sessions["date"].between(pd.Timestamp(TRAIN_START), pd.Timestamp(last_day))
     return sessions[inside].sort_values("date").reset_index(drop=True)
 
 
@@ -128,9 +129,15 @@ def mood_table(result: HierarchyResult, dates: pd.Series) -> pd.DataFrame:
     return pd.concat(pieces, ignore_index=True)
 
 
-def run(documents: pd.DataFrame, sessions: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, object]]:
-    """Fit on train, filter train and validation. Returns (mood table, fitted numbers)."""
-    calendar = sample_sessions(sessions)
+def run(
+    documents: pd.DataFrame, sessions: pd.DataFrame, last_day: date = VAL_END
+) -> tuple[pd.DataFrame, dict[str, object]]:
+    """Fit on train, filter from the start of train to `last_day`.
+
+    Returns (mood table, fitted numbers). The parameters and the tone centre always come from
+    the train period, whatever `last_day` is.
+    """
+    calendar = sample_sessions(sessions, last_day)
     dates = calendar["date"]
     missing_days = np.flatnonzero(~calendar["feed_observed"].to_numpy())
     train_documents = documents[documents["split"] == "train"]

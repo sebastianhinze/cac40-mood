@@ -1,6 +1,7 @@
-# Phase 6: what will run on the test period (proposed freeze, waiting for my OK)
+# Phase 6: what runs on the test period (approved, DECISIONS #64)
 
-Nothing below has been run. The test period is 2024-07-01 to 2025-12-31. It is evaluated once.
+The test period is 2024-07-01 to 2025-12-31. It is evaluated once, with
+`uv run python -m cac40_mood.phase6 test` on the commit tagged `phase6-freeze`. Results: `reports/06_test_results.md`.
 
 ## Before the run
 
@@ -48,20 +49,9 @@ Nothing below has been run. The test period is 2024-07-01 to 2025-12-31. It is e
 - Any new prompt, model, feature or parameter search.
 - Any trading strategy.
 
-## Open choice: which mood model carries RQ4?
+## Choices settled before the run (DECISIONS #64)
 
-On validation the nonlinear link itself turned out to be zero (beta = 0.0004), and the volatility forecast of
-that model adds nothing. All of M3's gain comes from its filtered mood, which with beta = 0 is a plain per-firm
-linear mood filter.
-
-1. **M3 as pre-registered (recommended).** It is the model whose test was fixed in advance (DECISIONS #58) and
-   it passed on validation. Its extra forecast column is dead weight, but dropping it now would be a choice made
-   after seeing the result.
-2. **M2**, the two-stage market/firm mood that RQ4 was first written for. It did not beat M on validation at
-   5 days (p = 0.28).
-3. **M + per-firm mood only.** The simplest and the strongest on validation (p = 0.002), but found after the
-   fact: it is the third mood variant looked at.
-
-Also to confirm: HAR slopes are re-estimated on an expanding window through the test period (as on validation).
-The alternative is to freeze them at the end of validation; CLAUDE.md's "fitted on train only" is applied to
-the mood model, the tone centre and the scorer, not to these rolling refits.
+- RQ4 is tested with **M3 as pre-registered**. The per-firm mood alone (`M+firm mood`) is exploratory only.
+- HAR slopes are **re-estimated every 22 trading days on an expanding window**, as on validation.
+- Rehearsal: `uv run python -m cac40_mood.phase6 rehearsal` runs the identical pipeline on the validation
+  period and reproduces the validation numbers.

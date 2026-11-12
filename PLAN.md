@@ -10,7 +10,7 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 | 3 Event study | 2 | ✅ train+validation results 2026-11-12 (`reports/03_event_study.md`) |
 | 4 Volatility | 3 | ✅ B0/B1/M/M2 on validation, GARCH-X robustness 2026-11-12; freeze proposed (DECISIONS #63) |
 | 5 Particle filter | 4 | ✅ linear mood (M2) and pre-registered nonlinear mood (M3) fitted on train and compared on validation 2026-11-12 |
-| 6 Final test evaluation | 1 | ⬜ plan and config proposed (`docs/PHASE6_PLAN.md`); not tagged, not run, waiting for my OK |
+| 6 Final test evaluation | 1 | 🟡 plan approved, runner written and rehearsed; tag `phase6-freeze`, then one run |
 | 7 Dashboard | 2 | ⬜ |
 | 8 Write-up | 2 | ⬜ |
 

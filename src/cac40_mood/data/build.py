@@ -154,7 +154,7 @@ def fetch_pdfs() -> None:
 
 
 def english_versions() -> pd.DataFrame:
-    """Official English versions of the French documents to score (train and validation).
+    """Official English versions of the French documents to score (all periods).
 
     The feed often carries the same announcement twice, in French and in English. The French
     one is the document we score; its English twin was set aside in phase 1. Returns one row
@@ -166,7 +166,7 @@ def english_versions() -> pd.DataFrame:
         ["doc_id", "twin_doc_id", "pdf_path"],
     ].rename(columns={"doc_id": "en_doc_id", "twin_doc_id": "doc_id"})
     documents = _documents_to_score()
-    wanted = documents.loc[documents["split"].isin(["train", "val"]), ["doc_id"]]
+    wanted = documents.loc[documents["split"].isin(["train", "val", "test"]), ["doc_id"]]
     return wanted.merge(twins, on="doc_id").drop_duplicates("doc_id").reset_index(drop=True)
 
 

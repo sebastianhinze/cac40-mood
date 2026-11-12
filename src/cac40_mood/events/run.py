@@ -12,6 +12,7 @@ ones), so p-values are also shown with the Benjamini-Hochberg adjustment.
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -53,13 +54,21 @@ def main_topic(documents: pd.DataFrame) -> pd.DataFrame:
     return first[["firm_id", "event_session", "topic"]]
 
 
-def build_events(documents: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
-    """One row per firm-day event with scores, controls and abnormal returns."""
+def build_events(
+    documents: pd.DataFrame,
+    prices: pd.DataFrame,
+    last_day: date = VAL_END,
+    splits: tuple[str, ...] = ("train", "val"),
+) -> pd.DataFrame:
+    """One row per firm-day event with scores, controls and abnormal returns.
+
+    Returns after `last_day` are never loaded (default: end of validation).
+    """
     documents = documents.assign(log_revenue=np.log(documents["revenue"]))
     columns = [*SCORES, "lm_tone", "lex_tone", "lmd_tone", "log_revenue"]
-    events = study.prepare_events(documents, columns)
+    events = study.prepare_events(documents, columns, splits)
     events = events.merge(main_topic(documents), on=["firm_id", "event_session"], how="left")
-    panel = market_model.build_return_panel(prices, "FCHI", pd.Timestamp(VAL_END))
+    panel = market_model.build_return_panel(prices, "FCHI", pd.Timestamp(last_day))
     events = market_model.abnormal_returns(panel, events)
     events["intraday_flag"] = events["intraday"].astype(float)
     return events

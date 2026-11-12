@@ -11,6 +11,8 @@ yesterday's close to today's open is not included; that is the same for every mo
 
 from __future__ import annotations
 
+from datetime import date
+
 import numpy as np
 import pandas as pd
 
@@ -37,14 +39,17 @@ def parkinson_variance(high: pd.Series, low: pd.Series) -> pd.Series:
     return np.log(high / low) ** 2 / (4.0 * np.log(2.0))
 
 
-def variance_panel(prices: pd.DataFrame, firms: list[str]) -> pd.DataFrame:
+def variance_panel(
+    prices: pd.DataFrame, firms: list[str], last_day: date = VAL_END
+) -> pd.DataFrame:
     """One row per firm and trading day: Garman-Klass variance, Parkinson variance, log return.
 
-    Only days up to the end of the validation period are returned, so nothing built on this
-    table can see the test period. A day whose variance estimate is not positive (high = low,
-    which happens on a trading halt) is set to missing: its logarithm does not exist.
+    Only days up to `last_day` are returned. The default is the end of validation, so
+    nothing built on this table sees the test period unless the phase 6 runner asks for it.
+    A day whose variance estimate is not positive (high = low, which happens on a trading
+    halt) is set to missing: its logarithm does not exist.
     """
-    kept = prices[prices["firm_id"].isin(firms) & (prices["date"] <= pd.Timestamp(VAL_END))]
+    kept = prices[prices["firm_id"].isin(firms) & (prices["date"] <= pd.Timestamp(last_day))]
     kept = kept.sort_values(["firm_id", "date"]).reset_index(drop=True)
     panel = kept[["firm_id", "date"]].copy()
     panel["rv"] = garman_klass_variance(kept["open"], kept["high"], kept["low"], kept["close"])

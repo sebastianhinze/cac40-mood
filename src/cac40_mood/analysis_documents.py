@@ -46,6 +46,7 @@ SCORE_COLUMNS: list[str] = [
 ]
 
 
+TUNING_SPLITS: tuple[str, ...] = ("train", "val")
 LOUGHRAN_COLUMNS: list[str] = ["lmd_tone", "lmd_uncertainty"]
 LOUGHRAN_PATH = PROCESSED_DIR / "baseline_loughran.parquet"
 
@@ -71,9 +72,10 @@ def select_documents(
     local_model: pd.DataFrame,
     revenue: pd.DataFrame,
     loughran: pd.DataFrame | None = None,
+    splits: tuple[str, ...] = TUNING_SPLITS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return (documents used in the analysis, a small table of how many each rule removed)."""
-    in_sample = filings.loc[filings["split"].isin(["train", "val"]), FILING_COLUMNS]
+    in_sample = filings.loc[filings["split"].isin(splits), FILING_COLUMNS]
     table = in_sample.merge(scores[SCORE_COLUMNS], on="doc_id", how="left")
     table = table.merge(lexicon[["doc_id", "lex_tone", "lex_uncertainty"]], on="doc_id", how="left")
     table = table.merge(local_model[["doc_id", "lm_tone"]], on="doc_id", how="left")
@@ -102,8 +104,8 @@ def select_documents(
     return table[keep].reset_index(drop=True), pd.DataFrame(removed)
 
 
-def load_documents() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """`select_documents` on the stored tables."""
+def load_documents(splits: tuple[str, ...] = TUNING_SPLITS) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """`select_documents` on the stored tables. Only the phase 6 runner passes other splits."""
     return select_documents(
         pd.read_parquet(FILINGS_PATH),
         pd.read_parquet(PROCESSED_DIR / "scores.parquet"),
@@ -111,4 +113,5 @@ def load_documents() -> tuple[pd.DataFrame, pd.DataFrame]:
         pd.read_parquet(PROCESSED_DIR / "baseline_local_model.parquet"),
         pd.read_parquet(TABLE_PATH),
         pd.read_parquet(LOUGHRAN_PATH) if LOUGHRAN_PATH.exists() else None,
+        splits,
     )

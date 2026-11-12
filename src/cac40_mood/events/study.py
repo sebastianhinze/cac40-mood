@@ -17,7 +17,11 @@ import statsmodels.api as sm
 from cac40_mood.data.universe import EXCLUDED_FROM_MAIN_ANALYSIS
 
 
-def prepare_events(documents: pd.DataFrame, score_columns: list[str]) -> pd.DataFrame:
+def prepare_events(
+    documents: pd.DataFrame,
+    score_columns: list[str],
+    splits: tuple[str, ...] = ("train", "val"),
+) -> pd.DataFrame:
     """One row per firm and event session, from scored documents.
 
     Kept: non-admin documents of the 36 main-analysis firms, in the train or validation period,
@@ -29,7 +33,7 @@ def prepare_events(documents: pd.DataFrame, score_columns: list[str]) -> pd.Data
     keep = (
         ~documents["is_admin"]
         & ~documents["firm_id"].isin(EXCLUDED_FROM_MAIN_ANALYSIS)
-        & documents["split"].isin(["train", "val"])
+        & documents["split"].isin(splits)
         & ~documents["in_feed_gap"]
         & documents["event_session"].notna()
     )
