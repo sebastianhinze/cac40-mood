@@ -119,6 +119,7 @@ def test_cut_does_not_step_back_to_a_far_away_line_break() -> None:
 def test_size_is_described_in_round_numbers(revenue_bn, expected) -> None:
     assert prompt.describe_size(revenue_bn) == expected
     assert prompt.describe_size(9.66, "USD") == "about USD 9.7 billion"
+    assert prompt.describe_size(184.0, "other") == "about 184 billion"
 
 
 def test_message_carries_no_date() -> None:

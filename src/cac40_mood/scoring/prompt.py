@@ -109,12 +109,16 @@ def truncate_text(text: str, max_chars: int) -> tuple[str, bool]:
 
 
 def describe_size(revenue_bn: float, currency: str = "EUR") -> str:
-    """'about EUR 26 billion' / 'about USD 600 million': a rounded size the model can use."""
+    """'about EUR 26 billion' / 'about USD 600 million': a rounded size the model can use.
+
+    When the currency is not EUR or USD (or was not identified), only the amount is given.
+    """
+    unit = f"{currency} " if currency in {"EUR", "USD"} else ""
     if revenue_bn >= 10:
-        return f"about {currency} {revenue_bn:.0f} billion"
+        return f"about {unit}{revenue_bn:.0f} billion"
     if revenue_bn >= 1:
-        return f"about {currency} {revenue_bn:.1f} billion"
-    return f"about {currency} {revenue_bn * 1000:.0f} million"
+        return f"about {unit}{revenue_bn:.1f} billion"
+    return f"about {unit}{revenue_bn * 1000:.0f} million"
 
 
 def build_user_message(

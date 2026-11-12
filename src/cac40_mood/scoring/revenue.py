@@ -30,13 +30,14 @@ from cac40_mood.scoring.batch import BatchItem, run_batch
 from cac40_mood.scoring.prompt import describe_size, truncate_text
 from cac40_mood.scoring.spend import SpendLog
 
-REVENUE_PROMPT_VERSION: str = "revenue-v1"
+REVENUE_PROMPT_VERSION: str = "revenue-v2"
 
 FACTS_PATH: Path = PROCESSED_DIR / "firm_revenue_facts.parquet"
 TABLE_PATH: Path = PROCESSED_DIR / "firm_revenue.parquet"
 
-# The headline revenue is on the first page of a results release.
-MAX_CHARS: int = 9_000
+# The headline revenue is usually on the first page; some groups show it in a table a few
+# pages in, so a little more than the first page is read.
+MAX_CHARS: int = 15_000
 MAX_OUTPUT_TOKENS: int = 600
 
 # Two extractions of the same fiscal year (from its own release and as the "previous year" in
@@ -44,21 +45,29 @@ MAX_OUTPUT_TOKENS: int = 600
 RESTATEMENT_TOLERANCE: float = 0.15
 
 SYSTEM_PROMPT: str = """\
-You extract one fact from an announcement published by a listed company: the group's total \
-revenue for a full fiscal year.
+You extract one fact from an announcement filed by a listed company: that company's total \
+consolidated revenue for a full fiscal year. The listed company is named before the text.
 
 First decide what the announcement is:
-- full_year: it announces the results or the revenue of a complete fiscal year (twelve months).
+- full_year: it announces the listed company's own results or revenue for a complete fiscal \
+year (twelve months).
 - half_year: first-half results or revenue.
-- quarter: a single quarter or nine months.
-- other: anything else.
+- quarter: a single quarter or nine months, without the full-year revenue.
+- other: anything else. This includes announcements about a subsidiary, an affiliate or \
+another company (for example a subsidiary's own annual results), even if they were filed \
+under the listed company's name.
 
-Only for full_year, fill in the revenue fields. Use the group's headline top-line figure as \
-the company itself reports it: revenue or sales (chiffre d'affaires) for industrial and service \
-companies, net banking income (produit net bancaire, revenues) for banks, total revenues for \
-insurers. Give amounts in millions of the reporting currency (12.3 billion is 12300). Use the \
-reported figure, not an organic or like-for-like variant. If a figure is not stated in the \
-text, leave it null; never compute or guess one.
+A fourth-quarter announcement that also states the full-year revenue counts as full_year.
+
+Only for full_year, fill in the revenue fields. Use the headline top-line figure of the \
+listed company's consolidated group as it reports it: revenue or sales (chiffre d'affaires) \
+for industrial and service companies, net banking income (produit net bancaire, revenus) for \
+banks, total revenues for insurers, gross rental income for property companies. If the text \
+gives figures both for the listed company and for a wider group it belongs to (for example a \
+mutual banking group), use the listed company's. Do not use the figure of a segment, a \
+division or a subsidiary. Give amounts in millions of the reporting currency (12.3 billion \
+is 12300). Use the reported figure, not an organic or like-for-like variant. If a figure is \
+not stated in the text, leave it null; never compute or guess one.
 
 Fields:
 - period: full_year, half_year, quarter or other.
@@ -118,7 +127,7 @@ def candidate_documents(documents: pd.DataFrame) -> pd.DataFrame:
 
 def build_request(model: str, issuer: str, title: str, text: str) -> dict[str, Any]:
     body, _ = truncate_text(text, MAX_CHARS)
-    message = f"Company: {issuer}\nTitle: {title.strip()}\n\n<document>\n{body}\n</document>"
+    message = f"Listed company: {issuer}\nTitle: {title.strip()}\n\n<document>\n{body}\n</document>"
     return {
         "model": model,
         "max_tokens": MAX_OUTPUT_TOKENS,
