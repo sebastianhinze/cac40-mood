@@ -1,0 +1,7 @@
+comparison,status,period,change_pct,ci_low_pct,ci_high_pct,dm_p_value
+RQ3: scores on top of announcement dummies,pre-registered,validation,-0.13558123084178259,-0.20631926432445177,-0.058948361235557654,0.00049
+RQ3: scores on top of announcement dummies,pre-registered,"test (frozen, run once)",-0.03268126429805313,-0.14006256127737055,0.07470003268126431,0.55039
+RQ4: nonlinear mood model on top of scores,pre-registered,validation,-0.7732719438049701,-1.4698069771560118,-0.07083407118824155,0.03051
+RQ4: nonlinear mood model on top of scores,pre-registered,"test (frozen, run once)",-0.2848869792639641,-1.3497104427423876,0.7752662058658696,0.59677
+Per-firm mood on top of scores,exploratory,validation,-0.7437577474765362,-1.2041792102001063,-0.27743344548727933,0.00173
+Per-firm mood on top of scores,exploratory,"test (frozen, run once)",-0.20549224733794136,-0.4530169998131889,0.042032505137306185,0.10398

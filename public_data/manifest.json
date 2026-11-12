@@ -1,0 +1,21 @@
+{
+  "built_at_utc": "2026-11-12T20:08:23Z",
+  "git_commit": "28579794a29ece4b82d2822cb6dca9975591b8f5",
+  "tone_centre_train": 0.1256961018297534,
+  "rows": {
+    "announcements.parquet": 6860,
+    "mood.parquet": 64548,
+    "event_car_paths.csv": 11,
+    "event_day0_terciles.csv": 6,
+    "event_scorer_slopes.csv": 8,
+    "vol_validation_vs_test.csv": 6
+  },
+  "attribution": "Filing metadata (issuer, title, timestamps, document links): DILA, info-financiere (https://www.info-financiere.gouv.fr), data received from the AMF; reused under the Licence Ouverte / Open Licence 2.0 (Etalab). Feed snapshot of 2026-11-11.",
+  "derived_data_licence": "CC BY 4.0",
+  "not_included": [
+    "prices or per-firm daily series derived from them",
+    "filing texts or excerpts",
+    "the Loughran-McDonald word list"
+  ],
+  "test_period_mood": "display only: same filter and saved train-period parameters as phase 4, run to 2025-12-31; not used in any analysis"
+}

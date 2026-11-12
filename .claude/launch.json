@@ -4,8 +4,32 @@
     {
       "name": "label-gold",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "streamlit", "run", "app/label_gold.py", "--server.port", "8511", "--server.headless", "true"],
+      "runtimeArgs": [
+        "run",
+        "streamlit",
+        "run",
+        "app/label_gold.py",
+        "--server.port",
+        "8511",
+        "--server.headless",
+        "true"
+      ],
       "port": 8511
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "streamlit",
+        "run",
+        "app/main.py",
+        "--server.port",
+        "8512",
+        "--server.headless",
+        "true"
+      ],
+      "port": 8512
     }
   ]
 }
