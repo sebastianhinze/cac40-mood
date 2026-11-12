@@ -41,6 +41,12 @@ uv run streamlit run app/label_gold.py
 Shows 40 documents one at a time (company, title, text) and stores my tone (−2 to +2) and topic in
 `data/processed/gold/labels.csv`. No model score is shown.
 
+When all 40 are labelled, compare the labels with the three scorers (the command refuses to run earlier):
+
+```bash
+uv run python -m cac40_mood.scoring.gold_report
+```
+
 ## Docs
 - [PROJECT_SPEC.md](PROJECT_SPEC.md): research questions, methods, evaluation rules
 - [PLAN.md](PLAN.md): build phases and done-when criteria
