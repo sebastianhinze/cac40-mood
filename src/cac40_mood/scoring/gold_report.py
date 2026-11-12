@@ -95,7 +95,9 @@ def tone_agreement_table(table: pd.DataFrame) -> pd.DataFrame:
         name: tone_agreement(table["human_tone"], table[column])
         for name, column in TONE_COLUMNS.items()
     }
-    return pd.DataFrame.from_dict(rows, orient="index")
+    result = pd.DataFrame.from_dict(rows, orient="index")
+    # Mixing whole and decimal numbers in one row turns the count into 40.0; make it 40 again.
+    return result.astype({"n": int})
 
 
 def topic_agreement(table: pd.DataFrame) -> dict[str, float]:
