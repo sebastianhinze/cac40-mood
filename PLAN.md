@@ -11,8 +11,8 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 | 4 Volatility | 3 | ✅ B0/B1/M/M2 on validation, GARCH-X robustness 2026-11-12; freeze proposed (DECISIONS #63) |
 | 5 Particle filter | 4 | ✅ linear mood (M2) and pre-registered nonlinear mood (M3) fitted on train and compared on validation 2026-11-12 |
 | 6 Final test evaluation | 1 | ✅ 2026-11-12: run once on tag `phase6-freeze` (f939524); RQ3 and RQ4 not confirmed (`reports/06_test_results.md`, `docs/FINDINGS.md`) |
-| 7 Dashboard | 2 | ⬜ |
-| 8 Write-up | 2 | ⬜ |
+| 7 Dashboard | 2 | ✅ 2026-11-12: `app/main.py` on the public bundle (`public_data/`), ready for Streamlit Community Cloud (DECISIONS #66-#70) |
+| 8 Write-up | 2 | 🟡 README rewritten, run guide, LICENSE, sharing check (2026-11-12); 2–4 page report and interview Q&A not started |
 
 ## Phase 1: Data
 - `universe.csv`: 37 firms → name, ticker, ISIN, LEI, index-entry date. Cross-check with Euronext.

@@ -1,0 +1,7 @@
+outcome,tone_tercile,events,mean,std_error,t,period
+CAR[0] (RQ1),low,1462.0,-0.0012,0.00047,-2.52533,train + validation
+CAR[0] (RQ1),middle,1531.0,0.00082,0.00035,2.35926,train + validation
+CAR[0] (RQ1),high,1376.0,0.00367,0.00069,5.35956,train + validation
+CAR[0] (RQ1),low,448.0,-0.00273,0.00132,-2.07655,"test (frozen, run once)"
+CAR[0] (RQ1),middle,379.0,-0.00231,0.00082,-2.80108,"test (frozen, run once)"
+CAR[0] (RQ1),high,391.0,0.0028,0.00142,1.97407,"test (frozen, run once)"

@@ -1,0 +1,6 @@
+# Light theme so the dashboard matches the README figures (which use a light chart surface).
+[theme]
+base = "light"
+backgroundColor = "#fcfcfb"
+primaryColor = "#2a78d6"
+textColor = "#0b0b0b"

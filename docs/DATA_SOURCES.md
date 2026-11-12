@@ -211,3 +211,57 @@ If the table has no figure for that year, the latest earlier year is used.
   `data/processed/texts_en.parquet`). 4,565 French documents to score have a twin.
 - The twins are the firms' own English versions, not machine translations.
 
+
+## 11. What may be shared: terms checked before going public (2026-11-12)
+
+**Filings (DILA "info-financière", the French OAM for AMF regulated information)**
+- The dataset page on data.gouv.fr (https://www.data.gouv.fr/datasets/info-financiere/informations) lists the
+  licence as **Licence Ouverte / Open Licence (Etalab)**: reuse allowed, including commercial, with attribution
+  (source and date of last update). Two extra conditions on that page: reusers must take into account the update
+  requests DILA posts on the dataset's discussion forum, and the licence does not exempt anyone from French data
+  protection law (Informatique et Libertés) where documents contain personal data. The API's own catalogue
+  metadata has an empty licence field.
+- The Licence Ouverte does not cover material on which third parties hold rights. The PDFs are written by the
+  issuers, so the conservative reading stays as before: **metadata (issuer, title, timestamps, type codes) may be
+  shown with attribution; full texts are not redistributed.** The dashboard shows at most about 400 characters
+  of a document plus a link to the official PDF on the DILA server.
+- Personal data: some filings name executives (share dealings, governance). The repository contains none beyond
+  document titles; the dashboard runs locally on local data.
+
+**Other inputs**
+- Prices (Yahoo via yfinance): personal, non-commercial use. No prices and no per-firm price-derived series are
+  committed; the reports and figures contain aggregates only (mean abnormal returns, loss differences, test
+  statistics).
+- Loughran-McDonald dictionary: free for academic research, not to be redistributed. It lives only in
+  `data/raw/lexicon/` (git-ignored); the code reads it from there and contains no part of it.
+- LLM outputs (scores, rationales): Anthropic's terms leave outputs to the user. They are published in the bundle
+  below (DECISIONS #67).
+
+**Public data bundle (`public_data/`, DECISIONS #67)**
+- Built by `uv run python -m cac40_mood.public_bundle` from the local pipeline outputs; committed so the dashboard
+  runs on a fresh clone and on Streamlit Community Cloud. About 2 MB.
+- Contents: `announcements.parquet` (6,860 scored, non-administrative filings of the 36 firms: issuer, title,
+  publication time, event session, period, language, topic, tone, surprise, uncertainty, confidence, the model's
+  one-line rationale, link to the official PDF on the DILA server); `mood.parquet` (filtered mood per firm and
+  trading day, 2019-2025, with its 95% band; the test-period part is for display only, DECISIONS #69);
+  `event_car_paths.csv` (average cumulative abnormal return by tone third, train + validation) and the event-study
+  and volatility tables as published in `reports/`; `manifest.json` (sources, row counts, git commit).
+- **Not included:** prices or any per-firm daily series derived from them; filing texts or excerpts (the public
+  dashboard shows only the link to the official PDF); the Loughran-McDonald word list.
+- **Attribution (Licence Ouverte 2.0):** "Filing metadata (issuer, title, timestamps, document links): DILA,
+  info-financière (https://www.info-financiere.gouv.fr), data received from the AMF; reused under the Licence
+  Ouverte / Open Licence 2.0 (Etalab). Feed snapshot of 2026-11-11." This line is in the bundle's `manifest.json`
+  and `README.md`, in the dashboard's sidebar and in the repository README.
+- Derived values (scores, rationales, mood, aggregate tables) are offered under CC BY 4.0.
+- Update requests that DILA posts on the dataset's data.gouv.fr discussion forum apply to this bundle too: a
+  withdrawn or corrected filing is removed or corrected here by rebuilding the bundle.
+
+**What the repository contains:** code, tests, docs, the reports in `reports/` (aggregate tables; a few tables
+list document titles and issuer names, `02_gold_agreement.md` lists two), aggregate figures, dashboard
+screenshots, the public data bundle above, and the executed data-quality notebook. The notebook's excerpt
+output (three filing excerpts, one with a press-office phone number and e-mail) was removed on 2026-11-12 and the
+HTML report regenerated from it (DECISIONS #70); earlier commits in the git history still contain that output.
+
+**Audit of the git history (all commits, 2026-11-12):** no `.env` was ever committed; no API-key pattern
+(`sk-ant-…` or long key assignments) appears in any diff; nothing under `data/` was committed except `.gitkeep`
+files; no Loughran-McDonald word list. Done before the first push to GitHub.
