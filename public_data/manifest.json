@@ -1,6 +1,6 @@
 {
-  "built_at_utc": "2026-11-12T20:02:26Z",
-  "git_commit": "9da640cdc6c2d2b2f8b9a2276776c20842cc2d2b+changes",
+  "built_at_utc": "2026-11-12T20:08:23Z",
+  "git_commit": "28579794a29ece4b82d2822cb6dca9975591b8f5",
   "tone_centre_train": 0.1256961018297534,
   "rows": {
     "announcements.parquet": 6860,
