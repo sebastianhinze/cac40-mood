@@ -12,7 +12,7 @@ volatility beyond what a HAR/GARCH model already predicts?
   particle filter on irregularly timed LLM observations.
 - Streamlit dashboard.
 
-**Status:** phase 1 (data) built, waiting for review. See [PLAN.md](PLAN.md).
+**Status:** phases 1–2 scored; baselines for volatility, the particle filter (simulated data) and event-study code are built. No result on sentiment yet. See [PLAN.md](PLAN.md).
 
 ## Quick start
 ```bash
