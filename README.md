@@ -47,6 +47,15 @@ When all 40 are labelled, compare the labels with the three scorers (the command
 uv run python -m cac40_mood.scoring.gold_report
 ```
 
+## Main analysis (train and validation only)
+```bash
+uv run python -m cac40_mood.mood.real            # fit the mood model on train, filter through validation
+uv run python -m cac40_mood.vol.sentiment_run    # HAR with announcement, score and mood columns
+uv run python -m cac40_mood.events.run           # event study with the scores
+uv run python -m cac40_mood.scoring.sanity       # breakdown of the documents that were not scored
+```
+Reports: `reports/04_vol_sentiment_validation.md`, `reports/03_event_study.md`, `reports/02_unscored_documents.md`.
+
 ## Docs
 - [PROJECT_SPEC.md](PROJECT_SPEC.md): research questions, methods, evaluation rules
 - [PLAN.md](PLAN.md): build phases and done-when criteria

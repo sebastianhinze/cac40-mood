@@ -6,10 +6,10 @@ Effort = focused working days (rough). Each phase ends with: stop, ≤10-bullet 
 |-------|--------|--------|
 | 0 Setup & planning | 0.5 | ✅ 2026-11-11 |
 | 1 Data | 3–4 | ✅ 2026-11-11 |
-| 2 Scoring | 3 | 🟡 bulk run done 2026-11-12 (6,996 documents, $4.96 spent in total), baselines scored; agreement report code ready; open: my gold labels, then run the report |
-| 3 Event study | 2 | 🟡 code and synthetic-data tests done 2026-11-11; results wait for scores |
-| 4 Volatility | 3 | 🟡 baselines B0 (HAR) and GARCH done on validation 2026-11-11; B1/M wait for scores |
-| 5 Particle filter | 4 | 🟡 implemented and validated on simulated data 2026-11-11 (docs/mood_model.md); real scores next |
+| 2 Scoring | 3 | ✅ 2026-11-12: bulk run, baselines, gold-set agreement reported (weak: tone rank correlation 0.43); open ❓ Loughran-McDonald (#57) |
+| 3 Event study | 2 | 🟡 results on train+validation 2026-11-12 (`reports/03_event_study.md`); waits for my review |
+| 4 Volatility | 3 | 🟡 B0/B1/M/M2 compared on validation 2026-11-12 (`reports/04_vol_sentiment_validation.md`); GARCH-X robustness and config freeze open |
+| 5 Particle filter | 4 | 🟡 fitted on train, filtered through validation, M2 compared 2026-11-12; Student-t on real data open |
 | 6 Final test evaluation | 1 | ⬜ |
 | 7 Dashboard | 2 | ⬜ |
 | 8 Write-up | 2 | ⬜ |

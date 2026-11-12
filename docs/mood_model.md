@@ -1,6 +1,6 @@
 # The mood model in plain language
 
-Status: implemented and validated on **simulated data only** (phase 5). It has not been run on real scores yet.
+Status: validated on simulated data (sections 1–9) and run on the real scores of the train and validation periods (section 10). The test period has not been touched.
 Code: `src/cac40_mood/mood/`. Tests: `tests/test_mood.py`.
 
 ## 1. What problem it solves
@@ -143,3 +143,42 @@ All numbers come from simulations where the true mood is known (`tests/test_mood
 - The two-stage market/firm filter is an approximation (section 6).
 - Forecast features will use the **filtered** mood only (information up to day t). Smoothed paths, which also use
   later documents, are for charts and will be labelled as such.
+
+## 10. Real data: the plan and what came out (train and validation only)
+
+Code: `src/cac40_mood/mood/real.py`. Run: `uv run python -m cac40_mood.mood.real`.
+
+**Plan, in the order it is done**
+
+1. **Readings.** One per scored document of the 36 firms (the document set of DECISIONS #53). Value = tone minus
+   the average train-period tone (0.126); confidence from the LLM; day = the document's event session.
+   Why centre: the mood drifts to zero without news, but the average document is mildly positive. Without
+   centring, silence would read as "worse than usual".
+2. **Missing days.** The 5 Mar – 15 Jun 2020 sessions are flagged missing: the filter only predicts there.
+3. **Parameters, train period only.** Exact Kalman likelihood with normal errors. Market and firm parameters
+   depend on each other, so they are fitted in turn, twice: fit the market (a firm's own mood counted as extra
+   noise), filter it, subtract it, fit the firm part on what is left (one parameter set for all firms).
+4. **Filter train and validation** with the two-stage particle filter (2,000 particles, fixed seed) and the
+   train parameters. The filter is causal: day t uses readings up to day t.
+5. **Features.** `mood_total` (market + firm part) and `mood_market`, added to the volatility model M to give M2.
+6. **Not done yet:** the Student-t variant on real data; the smoothed path for the dashboard; anything on the
+   test period (phase 6).
+
+**What came out**
+
+| | phi | half-life (days) | sigma_state | long-run sd | sigma_obs |
+|---|---|---|---|---|---|
+| Market mood | 0.926 | 9 | 0.044 | 0.12 | 0.19 |
+| Firm part | 0.993 | 96 | 0.014 | 0.12 | 0.18 |
+
+- 3,771 train readings for estimation; 5,239 readings filtered (train and validation); about one minute.
+- The market mood is short-lived (half of a move is gone in 9 trading days); a firm's own mood is very
+  persistent (about 96 days). Both have the same long-run spread, 0.12 on the tone scale.
+- A single reading is noisy next to that: its error (0.18–0.19 at full confidence) is larger than the whole
+  long-run spread of the mood, so one document moves the mood only a little. The typical stated uncertainty of a
+  firm's mood is 0.11.
+- The lowest market mood is in the third quarter of 2020 (average −0.17), the first full quarter after the feed
+  hole; from 2021 on it stays within about ±0.04 per quarter.
+- **Forecasting value (validation):** adding the two mood columns to model M improves QLIKE at 1 day
+  (p = 0.009) but not at the pre-registered 5 days (p = 0.28) and makes 22 days worse (not significant).
+  Details: `reports/04_vol_sentiment_validation.md`.
